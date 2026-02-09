@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora SENEBI | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+      <h1>Financial Tools</h1>
+      <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Calculadora SENEBI – Cuadro completo</h2>
+        <p class="tool-desc">Cálculo de vn para operaciones de FX. Complete los datos y pulse Calcular.</p>
+
+        <form id="form-senebi" novalidate action="javascript:void(0);">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="activo">Activo base</label>
+              <input type="text" id="activo" name="activo" placeholder="Ej: AL30" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+              <label for="plazo">Plazo</label>
+              <select id="plazo" name="plazo">
+                <option value="t0">t0</option>
+                <option value="t1">t1</option>
+                <option value="t2">t2</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="moneda-pata2">Moneda Pata 2</label>
+              <select id="moneda-pata2" name="moneda_pata2">
+                <option value="MEP">MEP</option>
+                <option value="Cable">Cable</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="monto-pata2">Monto Pata 2 (USD)</label>
+              <input type="text" id="monto-pata2" name="monto_pata2" placeholder="Ej: 50.000" inputmode="decimal" autocomplete="off" required data-decimales="2">
+            </div>
+            <div class="form-group">
+              <label for="precio-pata2">Precio Pata 2 (USD por 100 VN)</label>
+              <input type="text" id="precio-pata2" name="precio_pata2" placeholder="Ej: 98,5" inputmode="decimal" autocomplete="off" required data-decimales="3">
+            </div>
+            <div class="form-group">
+              <label for="tc">Tipo de cambio (Pesos/USD)</label>
+              <input type="text" id="tc" name="tc" placeholder="Ej: 1.150" inputmode="decimal" autocomplete="off" required data-decimales="2">
+            </div>
+            <div class="form-group">
+              <label for="contraparte">CONTRAPARTE (Agente)</label>
+              <input type="text" id="contraparte" name="contraparte" placeholder="Código numérico del agente" pattern="[0-9]+" required>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-calcular">Calcular</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="result-wrap">
+          <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
+          <div class="result-actions">
+            <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var TOLERANCIA = 0.01;
+
+      /** Parsea valor de input: miles con punto, decimales con coma → número */
+      function parseInputMonto(str) {
+        if (typeof str !== "string") return NaN;
+        var s = str.trim().replace(/\./g, "").replace(",", ".");
+        return parseFloat(s) || NaN;
+      }
+
+      /** Formato para mostrar en inputs: miles con punto, decimales con coma */
+      function formatInputMonto(num, decimales) {
+        if (isNaN(num) || num === "") return "";
+        var dec = decimales === undefined ? 2 : decimales;
+        var fixed = dec === 0 ? String(Math.round(num)) : (typeof num === "number" ? num.toFixed(dec) : parseFloat(num).toFixed(dec));
+        var parts = fixed.split(".");
+        var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        if (dec === 0) return intPart;
+        return intPart + "," + (parts[1] || "00");
+      }
+
+      /**
+       * Formato de montos en toda la página: miles con punto, decimales con coma.
+       * Para mostrar en pantalla usa este formato; para Excel (copiar) sin separadores y punto decimal.
+       * @param {number} value - Valor numérico
+       * @param {number} width - Ancho mínimo (padding izquierdo con espacios)
+       * @param {boolean} forDisplay - true = pantalla (1.234.567,89), false = Excel (1234567.89)
+       */
+      function formatNumber(value, width, forDisplay) {
+        var valueStr;
+        if (forDisplay) {
+          var dec = 2;
+          var fixed = value.toFixed(dec);
+          var parts = fixed.split(".");
+          var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+          valueStr = intPart + "," + (parts[1] || "00");
+        } else {
+          valueStr = value.toFixed(2);
+        }
+        if (width && valueStr.length < width) {
+          valueStr = valueStr.padStart(width);
+        }
+        return valueStr;
+      }
+
+      /**
+       * Lógica de cálculo del cuadro SENEBI (equivalente a calcular_cuadro en Python).
+       */
+      function calcularCuadro(formData) {
+        var activoBase = (formData.activo || "").trim().toUpperCase();
+        if (!activoBase) throw new Error("Debe ingresar un activo base.");
+
+        var plazo = formData.plazo;
+        var monedaPata2 = formData.moneda_pata2;
+        var montoPata2Ingresado = parseFloat(formData.monto_pata2);
+        var precioPata2Ingresado = parseFloat(formData.precio_pata2);
+        var tc = parseFloat(formData.tc);
+        var contraparte = (formData.contraparte || "").trim();
+
+        if (monedaPata2 === "Pesos") throw new Error("La Pata 2 debe ser MEP o Cable, no Pesos.");
+        if (!contraparte || !/^\d+$/.test(contraparte)) throw new Error("Debe ingresar un valor numérico válido para CONTRAPARTE.");
+
+        var activoPata1 = activoBase;
+        var activoPata2 = monedaPata2 === "MEP" ? activoBase + "D" : activoBase + "C";
+
+        var cantidadBase = montoPata2Ingresado / precioPata2Ingresado;
+        var cantidad = Math.round(cantidadBase * 100);
+
+        var precioPata2 = montoPata2Ingresado / (cantidad / 100);
+        precioPata2 = Math.round(precioPata2 * 1000) / 1000;
+        var montoPata2Calculado = (cantidad / 100) * precioPata2;
+
+        if (Math.abs(montoPata2Calculado - montoPata2Ingresado) > 0.01) {
+          precioPata2 = Math.round((montoPata2Ingresado / (cantidad / 100)) * 1000) / 1000;
+          montoPata2Calculado = (cantidad / 100) * precioPata2;
+        }
+
+        var montoPata1 = montoPata2Calculado * tc;
+        var precioPata1Base = montoPata1 / cantidad;
+        var precioPata1 = Math.round(precioPata1Base * 100 * 100) / 100;
+        var montoPata1Calculado = (cantidad / 100) * precioPata1;
+
+        var tcMontos = montoPata1Calculado / montoPata2Calculado;
+        var tcPrecios = precioPata1 / precioPata2;
+
+        if (Math.abs(tcMontos - tc) > TOLERANCIA) {
+          throw new Error("El TC calculado con montos (" + tcMontos.toFixed(3) + ") no coincide con el ingresado (" + tc.toFixed(3) + ").");
+        }
+        if (Math.abs(tcPrecios - tc) > TOLERANCIA) {
+          throw new Error("El TC calculado con precios (" + tcPrecios.toFixed(3) + ") no coincide con el ingresado (" + tc.toFixed(3) + ").");
+        }
+
+        var now = new Date();
+        var dia = String(now.getDate()).padStart(2, "0");
+        var mes = String(now.getMonth() + 1).padStart(2, "0");
+        var anio = now.getFullYear();
+        var fechaHoy = dia + "/" + mes + "/" + anio;
+
+        var anchoActivo = 10;
+        var anchoPlazo = 10;
+        var anchoCantidad = 15;
+        var anchoPrecio = 20;
+        var anchoMonto = 25;
+
+        var line1 = fechaHoy;
+        var line2 = "TC: " + Math.floor(tc) + " | CONTRAPARTE: " + contraparte;
+        var line3 = "ACTIVO\t" + "PLAZO".padStart(anchoPlazo) + "\t" + "CANTIDAD".padStart(anchoCantidad) + "\t" + "PRECIO".padStart(anchoPrecio) + "\t" + "MONTO".padStart(anchoMonto);
+        var line4 = activoPata1 + "\t" + plazo.padStart(anchoPlazo) + "\t" + formatNumber(cantidad, anchoCantidad, true) + "\t" + formatNumber(precioPata1, anchoPrecio, true) + "\t" + formatNumber(montoPata1Calculado, anchoMonto, true);
+        var line5 = activoPata2 + "\t" + plazo.padStart(anchoPlazo) + "\t" + formatNumber(cantidad, anchoCantidad, true) + "\t" + formatNumber(precioPata2, anchoPrecio, true) + "\t" + formatNumber(montoPata2Calculado, anchoMonto, true);
+
+        return {
+          display: line1 + "\n" + line2 + "\n\n" + line3 + "\n" + line4 + "\n" + line5,
+          forClipboard: line1 + "\n" + line2 + "\n\n" + line3 + "\n" +
+            activoPata1 + "\t" + plazo + "\t" + (cantidad.toFixed(2)) + "\t" + (precioPata1.toFixed(2)) + "\t" + (montoPata1Calculado.toFixed(2)) + "\n" +
+            activoPata2 + "\t" + plazo + "\t" + (cantidad.toFixed(2)) + "\t" + (precioPata2.toFixed(2)) + "\t" + (montoPata2Calculado.toFixed(2))
+        };
+      }
+
+      /**
+       * Reformatea el texto para portapapeles: números sin separador de miles, punto decimal (para pegar en Excel).
+       */
+      function textForClipboard(displayText) {
+        return displayText.replace(/(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)/g, function (m) {
+          return m.replace(/\./g, "").replace(",", ".");
+        });
+      }
+
+      var form = document.getElementById("form-senebi");
+      var resultadoEl = document.getElementById("resultado");
+      var btnCopiar = document.getElementById("btn-copiar");
+      var btnCalcular = document.getElementById("btn-calcular");
+      var lastResultForClipboard = null;
+
+      // Inputs con formato: miles punto, decimales coma (por id para los inputs con guión en el name)
+      ["monto-pata2", "precio-pata2", "tc"].forEach(function (id) {
+        var input = document.getElementById(id);
+        if (!input) return;
+        var decimales = parseInt(input.getAttribute("data-decimales"), 10) || 2;
+        input.addEventListener("blur", function () {
+          var num = parseInputMonto(input.value);
+          if (!isNaN(num) && input.value.trim() !== "") {
+            input.value = formatInputMonto(num, decimales);
+          }
+        });
+        input.addEventListener("focus", function () {
+          var num = parseInputMonto(input.value);
+          if (!isNaN(num)) {
+            if (decimales === 0) {
+              input.value = String(Math.round(num));
+            } else {
+              input.value = num.toFixed(decimales).replace(".", ",");
+            }
+          }
+        });
+      });
+
+      function ejecutarCalculo() {
+        var data = {
+          activo: form.activo.value,
+          plazo: form.plazo.value,
+          moneda_pata2: form.moneda_pata2.value,
+          monto_pata2: String(parseInputMonto(form.monto_pata2.value) || ""),
+          precio_pata2: String(parseInputMonto(form.precio_pata2.value) || ""),
+          tc: String(parseInputMonto(form.tc.value) || ""),
+          contraparte: form.contraparte.value
+        };
+        try {
+          var out = calcularCuadro(data);
+          lastResultForClipboard = out.forClipboard;
+          resultadoEl.textContent = out.display;
+          resultadoEl.classList.remove("empty", "error");
+          resultadoEl.classList.add("has-result");
+        } catch (err) {
+          resultadoEl.textContent = err.message;
+          resultadoEl.classList.remove("empty", "has-result");
+          resultadoEl.classList.add("error");
+          lastResultForClipboard = null;
+        }
+      }
+
+      if (btnCalcular) {
+        btnCalcular.addEventListener("click", ejecutarCalculo);
+      }
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        ejecutarCalculo();
+      });
+
+      btnCopiar.addEventListener("click", function () {
+        var text = lastResultForClipboard || resultadoEl.textContent;
+        if (!text || resultadoEl.classList.contains("empty")) {
+          resultadoEl.classList.add("error");
+          resultadoEl.textContent = "No hay resultado para copiar. Calcule primero.";
+          return;
+        }
+        var toCopy = lastResultForClipboard ? lastResultForClipboard : textForClipboard(text);
+        navigator.clipboard.writeText(toCopy).then(function () {
+          var orig = btnCopiar.innerHTML;
+          btnCopiar.innerHTML = "✓";
+          setTimeout(function () { btnCopiar.innerHTML = orig; }, 1500);
+        }).catch(function () {
+          resultadoEl.classList.add("error");
+          resultadoEl.textContent = "No se pudo copiar al portapapeles.";
+        });
+      });
+    })();
+  </script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>

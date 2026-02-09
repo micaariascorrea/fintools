@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora de garantías | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+      <h1>Financial Tools</h1>
+      <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Calculadora de garantías</h2>
+        <p class="tool-desc">Simula si tu cartera alcanza para garantizar una caución. Cargá Precios, Garantías aceptadas y tu archivo con especies y VN. Descargá la plantilla, completala y subila.</p>
+
+        <div class="form-group">
+          <a href="assets/plantilla_gara.xlsx" class="btn btn-secondary" download="plantilla_gara.xlsx">Descargar plantilla</a>
+          <span class="form-hint">Completala con Código CVSA (o Ticker) y Cantidad de VN; luego subila abajo.</span>
+        </div>
+
+        <form id="form-garantias" novalidate action="javascript:void(0);">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="file-precios">Precios</label>
+              <input type="file" id="file-precios" name="precios" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+            </div>
+            <div class="form-group">
+              <label for="file-garantias">Garantías aceptadas</label>
+              <input type="file" id="file-garantias" name="garantias" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+            </div>
+            <div class="form-group">
+              <label for="file-cartera">Mi cartera (archivo completado)</label>
+              <input type="file" id="file-cartera" name="cartera" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+            </div>
+            <div class="form-group">
+              <label for="mercado">Mercado</label>
+              <select id="mercado" name="mercado">
+                <option value="BYMA">BYMA</option>
+                <option value="MAV">MAV</option>
+                <option value="A3">A3</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="moneda">Moneda</label>
+              <select id="moneda" name="moneda">
+                <option value="ARS">ARS</option>
+                <option value="USD">USD</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="monto">Monto</label>
+              <input type="text" id="monto" name="monto" placeholder="Ej: 1.000.000" inputmode="decimal" autocomplete="off" required data-decimales="2">
+            </div>
+            <div class="form-group">
+              <label for="tasa">Tasa (% anual)</label>
+              <input type="text" id="tasa" name="tasa" placeholder="Ej: 25,5" inputmode="decimal" autocomplete="off" required data-decimales="2">
+            </div>
+            <div class="form-group">
+              <label for="plazo">Plazo (días)</label>
+              <input type="text" id="plazo" name="plazo" placeholder="Ej: 30" inputmode="numeric" autocomplete="off" required data-decimales="0">
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-calcular">Calcular</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="result-wrap">
+          <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
+          <div id="result-table-wrap" class="result-table-wrap" style="display: none;"></div>
+          <div class="result-actions">
+            <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button type="button" id="btn-exportar-excel" class="btn btn-icon btn-excel" title="Exportar a Excel" aria-label="Exportar a Excel"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+
+  <script src="assets/xlsx.full.min.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      function isExcelFile(file) {
+        var name = (file.name || "").toLowerCase();
+        return name.indexOf(".xls") !== -1;
+      }
+
+      function parseExcelFromArrayBuffer(ab, skipRows) {
+        var wb = window.XLSX.read(ab, { type: "array", cellDates: false });
+        var sheetName = wb.SheetNames[0];
+        var ws = wb.Sheets[sheetName];
+        var raw = window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false });
+        if (!raw.length || raw.length <= skipRows) return { headers: [], rows: [] };
+        var headerRow = raw[skipRows];
+        var headers = headerRow.map(function (c) { return String(c != null ? c : "").trim(); });
+        var rows = [];
+        for (var r = skipRows + 1; r < raw.length; r++) {
+          var row = raw[r];
+          var obj = {};
+          for (var c = 0; c < headers.length; c++) {
+            var val = row && row[c];
+            obj[headers[c]] = val !== undefined && val !== null ? String(val).trim() : "";
+          }
+          rows.push(obj);
+        }
+        return { headers: headers, rows: rows };
+      }
+
+      function normalize(s) {
+        s = String(s).trim().toLowerCase();
+        s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        s = s.replace(/[^a-z0-9]/g, "");
+        return s;
+      }
+
+      function parseCSVLine(line, delim) {
+        var out = [];
+        var i = 0;
+        while (i < line.length) {
+          if (line[i] === '"') {
+            i++;
+            var end = line.indexOf('"', i);
+            if (end === -1) end = line.length;
+            out.push(line.slice(i, end).replace(/""/g, '"'));
+            i = end + 1;
+          } else {
+            var next = line.indexOf(delim, i);
+            if (next === -1) {
+              out.push(line.slice(i).trim());
+              break;
+            }
+            out.push(line.slice(i, next).trim());
+            i = next + 1;
+          }
+        }
+        return out;
+      }
+
+      function parseCSV(text, skipRows) {
+        text = text.replace(/^\uFEFF/, "");
+        var lines = text.split(/\r?\n/).filter(function (l) { return l.length > 0; });
+        if (lines.length <= skipRows) return { headers: [], rows: [] };
+        var first = lines[skipRows];
+        var delim = first.indexOf(";") >= 0 ? ";" : ",";
+        var headers = parseCSVLine(first, delim);
+        var rows = [];
+        for (var r = skipRows + 1; r < lines.length; r++) {
+          var cells = parseCSVLine(lines[r], delim);
+          var obj = {};
+          for (var c = 0; c < headers.length; c++) {
+            obj[headers[c]] = cells[c] !== undefined ? cells[c] : "";
+          }
+          rows.push(obj);
+        }
+        return { headers: headers, rows: rows };
+      }
+
+      function findCol(cols, candidates, defaultIdx, required, context) {
+        var normMap = {};
+        for (var i = 0; i < cols.length; i++) {
+          normMap[normalize(cols[i])] = cols[i];
+        }
+        for (var j = 0; j < candidates.length; j++) {
+          var key = normalize(candidates[j]);
+          if (normMap[key]) return normMap[key];
+        }
+        if (defaultIdx !== null && defaultIdx !== undefined && defaultIdx >= 0 && defaultIdx < cols.length) {
+          return cols[defaultIdx];
+        }
+        if (required) {
+          throw new Error("No se encontró la columna requerida (" + candidates.join(", ") + ")" + (context ? " en " + context : "") + ". Columnas disponibles: " + cols.join(", "));
+        }
+        return null;
+      }
+
+      function buildNumericKeyDict(rows, keyCol, valueCol) {
+        var out = {};
+        for (var i = 0; i < rows.length; i++) {
+          var k = parseFloat(rows[i][keyCol]);
+          if (!isNaN(k)) {
+            out[parseInt(k, 10)] = rows[i][valueCol];
+          }
+        }
+        return out;
+      }
+
+      function parseInputMonto(str) {
+        if (typeof str !== "string") return NaN;
+        var s = str.trim().replace(/\./g, "").replace(",", ".");
+        return parseFloat(s) || NaN;
+      }
+
+      function formatInputMonto(num, decimales) {
+        if (isNaN(num) || num === "") return "";
+        var dec = decimales === undefined ? 2 : decimales;
+        var fixed = dec === 0 ? String(Math.round(num)) : (typeof num === "number" ? num.toFixed(dec) : parseFloat(num).toFixed(dec));
+        var parts = fixed.split(".");
+        var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        if (dec === 0) return intPart;
+        return intPart + "," + (parts[1] || "00");
+      }
+
+      function formatoNumero(num, decimales) {
+        if (num === null || num === undefined || isNaN(num)) return "N/A";
+        var dec = decimales === undefined ? 2 : decimales;
+        var fixed = dec === 0 ? String(Math.round(num)) : num.toFixed(dec);
+        var parts = fixed.split(".");
+        var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        if (dec === 0) return intPart;
+        return intPart + "," + (parts[1] || "00");
+      }
+
+      function readFileAsData(file, skipRows, cb) {
+        if (isExcelFile(file)) {
+          var r = new FileReader();
+          r.onload = function () {
+            try {
+              cb(null, parseExcelFromArrayBuffer(r.result, skipRows));
+            } catch (e) {
+              cb(e);
+            }
+          };
+          r.onerror = function () { cb(new Error("No se pudo leer " + (file.name || ""))); };
+          r.readAsArrayBuffer(file);
+        } else {
+          var r = new FileReader();
+          r.onload = function () {
+            try {
+              cb(null, parseCSV(r.result, skipRows));
+            } catch (e) {
+              cb(e);
+            }
+          };
+          r.onerror = function () { cb(new Error("No se pudo leer " + (file.name || ""))); };
+          r.readAsText(file, "UTF-8");
+        }
+      }
+
+      function runCalculation() {
+        var filePre = document.getElementById("file-precios").files[0];
+        var fileGar = document.getElementById("file-garantias").files[0];
+        var fileCar = document.getElementById("file-cartera").files[0];
+        var resultadoEl = document.getElementById("resultado");
+        var tableWrap = document.getElementById("result-table-wrap");
+
+        var monto = parseInputMonto(document.getElementById("monto").value);
+        var tasa = parseInputMonto(document.getElementById("tasa").value);
+        var plazo = parseInt(String(Math.round(parseInputMonto(document.getElementById("plazo").value) || 0)), 10);
+        var moneda = document.getElementById("moneda").value;
+        var mercado = document.getElementById("mercado").value;
+
+        if (!filePre || !fileGar || !fileCar) {
+          resultadoEl.textContent = "Seleccioná los tres archivos (Precios, Garantías aceptadas, Mi cartera).";
+          resultadoEl.classList.add("error");
+          resultadoEl.style.display = "block";
+          tableWrap.style.display = "none";
+          return;
+        }
+        if (isNaN(monto) || monto <= 0 || isNaN(plazo) || plazo <= 0) {
+          resultadoEl.textContent = "Monto y plazo deben ser mayores a cero.";
+          resultadoEl.classList.add("error");
+          resultadoEl.style.display = "block";
+          tableWrap.style.display = "none";
+          return;
+        }
+
+        readFileAsData(filePre, 1, function (errPre, pre) {
+          if (errPre) {
+            resultadoEl.textContent = "Error Precios: " + errPre.message;
+            resultadoEl.classList.add("error");
+            resultadoEl.style.display = "block";
+            tableWrap.style.display = "none";
+            return;
+          }
+          readFileAsData(fileGar, 0, function (errGar, gar) {
+            if (errGar) {
+              resultadoEl.textContent = "Error Garantías: " + errGar.message;
+              resultadoEl.classList.add("error");
+              resultadoEl.style.display = "block";
+              tableWrap.style.display = "none";
+              return;
+            }
+            readFileAsData(fileCar, 0, function (errCar, car) {
+              if (errCar) {
+                resultadoEl.textContent = "Error Mi cartera: " + errCar.message;
+                resultadoEl.classList.add("error");
+                resultadoEl.style.display = "block";
+                tableWrap.style.display = "none";
+                return;
+              }
+              try {
+                var preCols = pre.headers;
+                var codPre = findCol(preCols, ["Cód.", "Cód", "Cod", "Código", "Codigo", "Código CVSA", "Codigo CVSA"], 0, true, "Precios");
+                var precioCol = findCol(preCols, ["Precio", "Valor", "Precio del título", "Valor del título"], 4, true, "Precios");
+                var denomCol = findCol(preCols, ["Denominación", "Denominacion", "Especie", "Descripción", "Descripcion"], 1, true, "Precios");
+                var preciosDict = buildNumericKeyDict(pre.rows, codPre, precioCol);
+                var denomDict = buildNumericKeyDict(pre.rows, codPre, denomCol);
+                var denomToCod = {};
+                for (var i = 0; i < pre.rows.length; i++) {
+                  var c = parseFloat(pre.rows[i][codPre]);
+                  if (!isNaN(c)) {
+                    var d = String(pre.rows[i][denomCol] || "").trim().toUpperCase();
+                    if (d && !denomToCod[d]) denomToCod[d] = parseInt(c, 10);
+                  }
+                }
+
+                var garCols = gar.headers;
+                var codGar = findCol(garCols, ["Código CVSA", "Codigo CVSA", "Código", "Codigo", "Cód.", "Cod."], 0, true, "Garantías");
+                var aforoCol = findCol(garCols, ["Aforo", "Aforo %", "Porcentaje aforo", "Aforo % "], 3, false, "Garantías");
+                var especieCol = findCol(garCols, ["Especie", "Denominación", "Denominacion", "Descripción"], 1, false, "Garantías");
+                var listaCol = findCol(garCols, ["Lista", "Segmento", "Tipo de Instrumento"], 3, false, "Garantías");
+                var cupoCol = findCol(garCols, ["Máximo por especie", "Maximo por especie", "Cupo Máximo", "Cupo Maximo", "Cupo"], 2, false, "Garantías");
+                var aforoDict = {};
+                if (aforoCol) {
+                  aforoDict = buildNumericKeyDict(gar.rows, codGar, aforoCol);
+                }
+                var cupoDict = {};
+                if (cupoCol) {
+                  cupoDict = buildNumericKeyDict(gar.rows, codGar, cupoCol);
+                }
+                for (var gi = 0; gi < gar.rows.length; gi++) {
+                  var gk = parseFloat(gar.rows[gi][codGar]);
+                  if (!isNaN(gk) && aforoDict[parseInt(gk, 10)] === undefined) {
+                    aforoDict[parseInt(gk, 10)] = 100;
+                  }
+                }
+                var especieDict = buildNumericKeyDict(gar.rows, codGar, especieCol || garCols[1] || garCols[0]);
+                var listaDict = buildNumericKeyDict(gar.rows, codGar, listaCol || garCols[3] || garCols[0]);
+
+                var carCols = car.headers;
+                var codCarCol = findCol(carCols, ["Código CVSA", "Codigo CVSA", "Código", "Cod", "Ticker", "Ticker "], 0, true, "Mi cartera");
+                var cantCol = findCol(carCols, ["Cantidad", "Valores Nominales", "VN", "Cantidad VN", "Valores nominales"], 1, true, "Mi cartera");
+
+                var montoFinal = monto + monto * (tasa / 100) * (plazo / 365);
+                var simbolo = moneda === "USD" ? "USD" : "$";
+                var results = [];
+                var totalContrib = 0;
+
+                for (var ri = 0; ri < car.rows.length; ri++) {
+                  var r = car.rows[ri];
+                  var idVal = String(r[codCarCol] || "").trim();
+                  var vn = parseFloat(r[cantCol]);
+                  if (!idVal || isNaN(vn) || vn <= 0) continue;
+                  var cod = null;
+                  if (/^\d+$/.test(idVal)) {
+                    cod = parseInt(idVal, 10);
+                  } else {
+                    cod = denomToCod[idVal.toUpperCase()] || parseInt(idVal, 10);
+                    if (isNaN(cod)) cod = null;
+                  }
+                  if (cod === null) continue;
+                  var price = preciosDict[cod];
+                  if (price === undefined || price === null || price === "" || isNaN(parseFloat(price))) continue;
+                  price = parseFloat(price);
+                  var lista = String(listaDict[cod] || "");
+                  var isFixedIncome = lista.indexOf("Acciones") !== 0 && lista.indexOf("CEDEARS") !== 0;
+                  var multiplier = isFixedIncome ? price / 100 : price;
+                  var aforoVal = aforoDict[cod];
+                  if (aforoVal === undefined || aforoVal === null || aforoVal === "") aforoVal = 0;
+                  aforoVal = parseFloat(aforoVal);
+                  var aforoDecimal = aforoVal > 1 ? aforoVal / 100 : aforoVal;
+                  var contrib = vn * multiplier * aforoDecimal;
+                  totalContrib += contrib;
+                  var cupoRaw = cupoDict[cod];
+                  var cupoMax = (cupoRaw !== undefined && cupoRaw !== null && cupoRaw !== "") ? parseFloat(cupoRaw) : 0;
+                  if (isNaN(cupoMax)) cupoMax = 0;
+                  var especie = especieDict[cod] !== undefined && especieDict[cod] !== null && String(especieDict[cod]).trim() !== "" ? especieDict[cod] : denomDict[cod] || cod;
+                  results.push({
+                    cod: cod,
+                    especie: especie,
+                    vn: vn,
+                    precio: multiplier,
+                    aforoPct: aforoVal,
+                    contribucion: contrib,
+                    cupoMax: cupoMax
+                  });
+                }
+
+                /* Orden: mayor aforo primero, luego mayor cupo máximo. */
+                results.sort(function (a, b) {
+                  if (b.aforoPct !== a.aforoPct) return (b.aforoPct || 0) - (a.aforoPct || 0);
+                  return (b.cupoMax || 0) - (a.cupoMax || 0);
+                });
+
+                /* Asignación voraz: cubrir monto final usando especies en ese orden. */
+                var restante = montoFinal;
+                for (var qi = 0; qi < results.length; qi++) {
+                  var row = results[qi];
+                  var useContrib = restante <= 0 ? 0 : (row.contribucion <= restante ? row.contribucion : restante);
+                  var useRatio = row.contribucion > 0 ? useContrib / row.contribucion : 0;
+                  row.montoUsado = useContrib;
+                  row.vnUsado = row.vn * useRatio;
+                  row.vnLibre = row.vn - row.vnUsado;
+                  row.pctCobertura = montoFinal > 0 ? (useContrib / montoFinal) * 100 : 0;
+                  restante -= useContrib;
+                }
+
+                var pctTotal = montoFinal > 0 ? (totalContrib / montoFinal) * 100 : 0;
+                var alcanza = totalContrib >= montoFinal;
+
+                resultadoEl.classList.remove("empty", "error");
+                resultadoEl.classList.add("has-result");
+                resultadoEl.style.display = "none";
+                tableWrap.style.display = "block";
+
+                var tableHtml = "<p class=\"result-summary\">Monto inicial: " + simbolo + " " + formatoNumero(monto, 0) + " | Tasa: " + formatoNumero(tasa, 2) + "% | Plazo: " + plazo + " días</p>";
+                tableHtml += "<p class=\"result-summary\"><strong>Monto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "</strong></p>";
+                tableHtml += "<p class=\"result-summary\">Total garantía calculada: " + simbolo + " " + formatoNumero(totalContrib, 2) + " | <strong>" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "</strong></p>";
+                tableHtml += "<table class=\"result-table\"><thead><tr><th>Cód.</th><th>Especie</th><th>VN</th><th>Precio</th><th>Aforo %</th><th>Contribución " + moneda + "</th><th>% del monto final</th><th>VN usado</th><th>Monto usado " + moneda + "</th><th>VN libre</th></tr></thead><tbody>";
+                var copyLines = ["Cód.\tEspecie\tVN\tPrecio\tAforo %\tContribución " + moneda + "\t% del monto final\tVN usado\tMonto usado " + moneda + "\tVN libre"];
+                for (var i = 0; i < results.length; i++) {
+                  var row = results[i];
+                  tableHtml += "<tr><td>" + row.cod + "</td><td>" + escapeHtml(row.especie) + "</td><td>" + formatoNumero(row.vn, 2) + "</td><td>" + formatoNumero(row.precio, 4) + "</td><td>" + formatoNumero(row.aforoPct, 2) + "</td><td>" + formatoNumero(row.contribucion, 2) + "</td><td>" + formatoNumero(row.pctCobertura, 2) + "%</td><td>" + formatoNumero(row.vnUsado, 2) + "</td><td>" + formatoNumero(row.montoUsado, 2) + "</td><td>" + formatoNumero(row.vnLibre, 2) + "</td></tr>";
+                  copyLines.push([row.cod, row.especie, formatoNumero(row.vn, 2), formatoNumero(row.precio, 4), formatoNumero(row.aforoPct, 2), formatoNumero(row.contribucion, 2), formatoNumero(row.pctCobertura, 2) + "%", formatoNumero(row.vnUsado, 2), formatoNumero(row.montoUsado, 2), formatoNumero(row.vnLibre, 2)].join("\t"));
+                }
+                tableHtml += "</tbody></table>";
+                tableWrap.innerHTML = tableHtml;
+
+                window._lastResultText = "Monto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "\nTotal garantía: " + simbolo + " " + formatoNumero(totalContrib, 2) + "\n" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "\n\n" + copyLines.join("\n");
+                window._lastResultsForExcel = results;
+                window._lastGarantiasMeta = { montoFinal: montoFinal, totalContrib: totalContrib, alcanza: alcanza, pctTotal: pctTotal, moneda: moneda, mercado: mercado };
+              } catch (err) {
+                resultadoEl.textContent = "Error: " + err.message;
+                resultadoEl.classList.add("error");
+                resultadoEl.style.display = "block";
+                tableWrap.style.display = "none";
+                window._lastResultText = null;
+                window._lastResultsForExcel = null;
+              }
+            });
+          });
+        });
+      }
+
+      function escapeHtml(s) {
+        var div = document.createElement("div");
+        div.textContent = s;
+        return div.innerHTML;
+      }
+
+      document.getElementById("btn-calcular").addEventListener("click", runCalculation);
+      document.getElementById("form-garantias").addEventListener("submit", function (e) {
+        e.preventDefault();
+        runCalculation();
+      });
+
+      [].forEach.call(document.querySelectorAll("#monto, #tasa, #plazo"), function (input) {
+        var dec = parseInt(input.getAttribute("data-decimales"), 10) || 2;
+        input.addEventListener("blur", function () {
+          var num = parseInputMonto(input.value);
+          if (!isNaN(num) && input.value.trim() !== "") input.value = formatInputMonto(num, dec);
+        });
+        input.addEventListener("focus", function () {
+          var num = parseInputMonto(input.value);
+          if (!isNaN(num)) input.value = dec === 0 ? String(Math.round(num)) : num.toFixed(dec).replace(".", ",");
+        });
+      });
+
+      var btnCopiar = document.getElementById("btn-copiar");
+      var origCopiar = btnCopiar.innerHTML;
+      btnCopiar.addEventListener("click", function () {
+        var text = window._lastResultText;
+        if (!text) {
+          document.getElementById("resultado").textContent = "No hay resultado. Calcule primero.";
+          document.getElementById("resultado").classList.add("error");
+          return;
+        }
+        navigator.clipboard.writeText(text).then(function () {
+          btnCopiar.innerHTML = "✓";
+          setTimeout(function () { btnCopiar.innerHTML = origCopiar; }, 1500);
+        });
+      });
+
+      var btnExcel = document.getElementById("btn-exportar-excel");
+      var origExcel = btnExcel.innerHTML;
+      btnExcel.addEventListener("click", function () {
+        var results = window._lastResultsForExcel;
+        var meta = window._lastGarantiasMeta;
+        if (!results || !results.length) {
+          document.getElementById("resultado").textContent = "No hay resultado. Calcule primero.";
+          document.getElementById("resultado").classList.add("error");
+          return;
+        }
+        var XLSX = window.XLSX;
+        if (!XLSX) { alert("No se pudo cargar la librería de exportación."); return; }
+        var headers = ["Cód.", "Especie", "VN", "Precio", "Aforo %", "Contribución " + (meta && meta.moneda ? meta.moneda : "ARS"), "% del monto final", "VN usado", "Monto usado " + (meta && meta.moneda ? meta.moneda : "ARS"), "VN libre"];
+        var aoa = [headers];
+        for (var i = 0; i < results.length; i++) {
+          var row = results[i];
+          aoa.push([row.cod, row.especie, row.vn, row.precio, row.aforoPct, row.contribucion, row.pctCobertura.toFixed(2) + "%", row.vnUsado, row.montoUsado, row.vnLibre]);
+        }
+        if (meta) {
+          aoa.push([]);
+          aoa.push(["Monto final (caución)", meta.montoFinal]);
+          aoa.push(["Total garantía", meta.totalContrib]);
+          aoa.push(["¿Alcanza?", meta.alcanza ? "Sí" : "No"]);
+          aoa.push(["% cubierto", meta.pctTotal.toFixed(2) + "%"]);
+        }
+        var ws = XLSX.utils.aoa_to_sheet(aoa);
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Simulación garantías");
+        XLSX.writeFile(wb, "simulacion_garantias.xlsx");
+        btnExcel.innerHTML = "✓";
+        setTimeout(function () { btnExcel.innerHTML = origExcel; }, 1500);
+      });
+    })();
+  </script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>

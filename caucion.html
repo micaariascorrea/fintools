@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora de Caución | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+      <h1>Financial Tools</h1>
+      <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Calculadora de Caución</h2>
+        <p class="tool-desc">Cálculo de intereses. Tasa anual, plazo en días.</p>
+
+        <form id="form-caucion" novalidate action="javascript:void(0);">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="monto">Monto</label>
+              <input type="text" id="monto" name="monto" placeholder="Ej: 100.000" inputmode="decimal" autocomplete="off" required data-decimales="2">
+            </div>
+            <div class="form-group">
+              <label for="tasa">Tasa (% anual)</label>
+              <input type="text" id="tasa" name="tasa" placeholder="Ej: 25,5" inputmode="decimal" autocomplete="off" required data-decimales="2">
+            </div>
+            <div class="form-group">
+              <label for="plazo">Plazo (días)</label>
+              <input type="text" id="plazo" name="plazo" placeholder="Ej: 30" inputmode="numeric" autocomplete="off" required data-decimales="0">
+            </div>
+            <div class="form-group">
+              <label for="moneda">Moneda</label>
+              <select id="moneda" name="moneda">
+                <option value="pesos">Pesos</option>
+                <option value="dolar">Dólar</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-calcular">Calcular</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="result-wrap">
+          <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
+          <div class="result-actions">
+            <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      /**
+       * Formato de montos en toda la página: miles con punto, decimales con coma.
+       * Solo en Caución: monto inicial sin decimales; monto final (e intereses) hasta 2 decimales.
+       */
+      function formatoMonto(num, decimales) {
+        var dec = decimales === undefined ? 2 : decimales;
+        var fixed = dec === 0 ? String(Math.round(num)) : num.toFixed(dec);
+        var parts = fixed.split(".");
+        var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        if (dec === 0) return intPart;
+        return intPart + "," + (parts[1] || "00");
+      }
+
+      /** Parsea valor de input: miles con punto, decimales con coma → número */
+      function parseInputMonto(str) {
+        if (typeof str !== "string") return NaN;
+        var s = str.trim().replace(/\./g, "").replace(",", ".");
+        return parseFloat(s) || NaN;
+      }
+
+      /** Formato para mostrar en inputs: miles con punto, decimales con coma */
+      function formatInputMonto(num, decimales) {
+        if (isNaN(num) || num === "") return "";
+        var dec = decimales === undefined ? 2 : decimales;
+        var fixed = dec === 0 ? String(Math.round(num)) : (typeof num === "number" ? num.toFixed(dec) : parseFloat(num).toFixed(dec));
+        var parts = fixed.split(".");
+        var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        if (dec === 0) return intPart;
+        return intPart + "," + (parts[1] || "00");
+      }
+
+      /**
+       * Calcula intereses (tasa anual, plazo en días) y monto final.
+       * Fórmula: Intereses = monto * (tasa/100) * (plazo/365)
+       */
+      function calcularCaucion(monto, tasa, plazo, moneda) {
+        if (monto <= 0 || plazo <= 0) {
+          throw new Error("Monto y plazo deben ser mayores a cero.");
+        }
+        var intereses = monto * (tasa / 100) * (plazo / 365);
+        var montoFinal = monto + intereses;
+        var simbolo = moneda === "dolar" ? "USD" : "$";
+        return {
+          intereses: intereses,
+          montoFinal: montoFinal,
+          moneda: moneda,
+          simbolo: simbolo,
+          monedaLabel: moneda === "dolar" ? "Dólar" : "Pesos"
+        };
+      }
+
+      var form = document.getElementById("form-caucion");
+      var resultadoEl = document.getElementById("resultado");
+      var btnCopiar = document.getElementById("btn-copiar");
+      var btnCalcular = document.getElementById("btn-calcular");
+
+      // Inputs con formato: miles punto, decimales coma. Al salir (blur) formatear; al entrar (focus) valor crudo para editar.
+      [form.monto, form.tasa, form.plazo].forEach(function (input) {
+        var decimales = parseInt(input.getAttribute("data-decimales"), 10) || 2;
+        input.addEventListener("blur", function () {
+          var num = parseInputMonto(input.value);
+          if (!isNaN(num) && input.value.trim() !== "") {
+            input.value = formatInputMonto(num, decimales);
+          }
+        });
+        input.addEventListener("focus", function () {
+          var num = parseInputMonto(input.value);
+          if (!isNaN(num)) {
+            if (decimales === 0) {
+              input.value = String(Math.round(num));
+            } else {
+              var fixed = num.toFixed(decimales);
+              input.value = fixed.replace(".", ",");
+            }
+          }
+        });
+      });
+
+      function ejecutarCalculo() {
+        var monto = parseInputMonto(form.monto.value) || 0;
+        var tasa = parseInputMonto(form.tasa.value) || 0;
+        var plazo = parseInt(String(Math.round(parseInputMonto(form.plazo.value) || 0)), 10) || 0;
+        var moneda = form.moneda.value;
+
+        try {
+          var r = calcularCaucion(monto, tasa, plazo, moneda);
+          var texto =
+            "Moneda: " + r.monedaLabel + "\n\n" +
+            "Monto inicial: " + r.simbolo + " " + formatoMonto(monto, 0) + "\n" +
+            "Intereses:     " + r.simbolo + " " + formatoMonto(r.intereses, 2) + "\n" +
+            "Monto final:   " + r.simbolo + " " + formatoMonto(r.montoFinal, 2);
+
+          resultadoEl.textContent = texto;
+          resultadoEl.classList.remove("empty", "error");
+          resultadoEl.classList.add("has-result");
+        } catch (err) {
+          resultadoEl.textContent = err.message;
+          resultadoEl.classList.remove("empty", "has-result");
+          resultadoEl.classList.add("error");
+        }
+      }
+
+      btnCalcular.addEventListener("click", ejecutarCalculo);
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        ejecutarCalculo();
+      });
+
+      btnCopiar.addEventListener("click", function () {
+        var text = resultadoEl.textContent.trim();
+        if (!text || resultadoEl.classList.contains("empty")) {
+          resultadoEl.classList.add("error");
+          resultadoEl.textContent = "No hay resultado para copiar. Calcule primero.";
+          return;
+        }
+        navigator.clipboard.writeText(text).then(function () {
+          var orig = btnCopiar.innerHTML;
+          btnCopiar.innerHTML = "✓";
+          setTimeout(function () { btnCopiar.innerHTML = orig; }, 1500);
+        }).catch(function () {
+          resultadoEl.classList.add("error");
+          resultadoEl.textContent = "No se pudo copiar al portapapeles.";
+        });
+      });
+    })();
+  </script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>

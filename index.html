@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Financial Tools | @ALLINARG</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <!-- Header principal -->
+    <header class="site-header site-header-home">
+      <div class="site-header-inner">
+        <h1>Financial Tools</h1>
+        <p class="subtitle">@ALLINARG</p>
+      </div>
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+    </header>
+
+    <!-- Filtro por etiqueta -->
+    <div class="cards-filter">
+      <span class="cards-filter-label">Ver:</span>
+      <button type="button" class="cards-filter-btn active" data-tag="">Todos</button>
+      <button type="button" class="cards-filter-btn" data-tag="Calculator">Calculator</button>
+      <button type="button" class="cards-filter-btn" data-tag="Charts">Charts</button>
+      <button type="button" class="cards-filter-btn" data-tag="Risk Control">Risk Control</button>
+    </div>
+
+    <!-- Grid de herramientas (cards) -->
+    <main class="cards-grid" id="cards-grid">
+      <!-- Card 1: Calculadora de Caución -->
+      <a href="caucion.html" class="card" data-tag="Calculator">
+        <h2 class="card-title">Calculadora de Caución</h2>
+        <p class="card-desc">Cálculo de intereses</p>
+        <span class="card-tag">Calculator</span>
+      </a>
+
+      <!-- Card 2: Calculadora SENEBI -->
+      <a href="senebi.html" class="card" data-tag="Calculator">
+        <h2 class="card-title">Calculadora SENEBI</h2>
+        <p class="card-desc">Cálculo de vn para operaciones de FX.</p>
+        <span class="card-tag">Calculator</span>
+      </a>
+
+      <!-- Card 3: Calculadora de garantías -->
+      <a href="garantias.html" class="card" data-tag="Risk Control">
+        <h2 class="card-title">Calculadora de garantías</h2>
+        <p class="card-desc">Cálculo de garantías para caución tomadora.</p>
+        <span class="card-tag">Risk Control</span>
+      </a>
+
+      <!-- Card 4: Posición de garantías -->
+      <a href="posicion-garantias.html" class="card" data-tag="Risk Control">
+        <h2 class="card-title">Posición de garantías</h2>
+        <p class="card-desc">Coberturas, precios y cupos por especie a partir de archivos CSV.</p>
+        <span class="card-tag">Risk Control</span>
+      </a>
+
+      <!-- Card 5: Descuento -->
+      <a href="descuento.html" class="card" data-tag="Calculator">
+        <h2 class="card-title">Descuento</h2>
+        <p class="card-desc">Valor actual por valor nominal, tasa y fechas (base 365 días).</p>
+        <span class="card-tag">Calculator</span>
+      </a>
+
+      <!-- Card 6: Arbitraje -->
+      <a href="arbitraje.html" class="card" data-tag="Charts">
+        <h2 class="card-title">Arbitraje</h2>
+        <p class="card-desc">Compará dos activos en un gráfico: ratio o relación entre ambos.</p>
+        <span class="card-tag">Charts</span>
+      </a>
+
+      <!-- Card 7: Tipos de cambio -->
+      <a href="tipos-cambio.html" class="card" data-tag="Calculator">
+        <h2 class="card-title">Tipos de cambio</h2>
+        <p class="card-desc">Dólar MEP, CCL y referencias al último cierre.</p>
+        <span class="card-tag">Calculator</span>
+      </a>
+    </main>
+
+    <section class="links-utiles">
+      <h3 class="links-utiles-title">Links útiles</h3>
+      <ul class="links-utiles-list">
+        <li><a href="https://www.bcra.gob.ar/" target="_blank" rel="noopener">BCRA</a></li>
+        <li><a href="https://inversores.cajadevalores.com.ar/#/auth/login?returnUrl=%2Fpages%2Fhome" target="_blank" rel="noopener">Caja de Valores</a></li>
+        <li><a href="https://www.byma.com.ar/" target="_blank" rel="noopener">BYMA</a></li>
+        <li><a href="https://a3mercados.com.ar/" target="_blank" rel="noopener">A3</a></li>
+        <li><a href="https://mav-sa.com.ar/?no_cache=1" target="_blank" rel="noopener">MAV</a></li>
+      </ul>
+    </section>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+  <script src="assets/ticker.js"></script>
+  <script>
+    (function () {
+      var grid = document.getElementById("cards-grid");
+      var cards = grid ? grid.querySelectorAll(".card") : [];
+      var btns = document.querySelectorAll(".cards-filter-btn");
+      function filter(tag) {
+        cards.forEach(function (card) {
+          var cardTag = (card.getAttribute("data-tag") || "").trim();
+          card.style.display = (tag === "" || cardTag === tag) ? "" : "none";
+        });
+        btns.forEach(function (btn) {
+          btn.classList.toggle("active", (btn.getAttribute("data-tag") || "") === tag);
+        });
+      }
+      btns.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          filter(btn.getAttribute("data-tag") || "");
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

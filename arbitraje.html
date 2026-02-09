@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arbitraje – Ratio de activos | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+      <h1>Financial Tools</h1>
+      <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Arbitraje</h2>
+        <p class="tool-desc">Elegí dos activos y mirá en el gráfico su ratio (Activo 1 / Activo 2). Datos vía <a href="https://data912.com/" target="_blank" rel="noopener">data912.com</a> (bonos, acciones argentinas y cedears).</p>
+
+        <form id="form-arbitraje" novalidate action="javascript:void(0);">
+          <div class="form-grid form-grid-arbitraje">
+            <div class="form-group">
+              <label for="activo1">Activo 1 (numerador)</label>
+              <input type="text" id="activo1" name="activo1" placeholder="Ej: AL30, GGAL, AAPL" list="sugerencias-activos" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+              <label for="activo2">Activo 2 (denominador)</label>
+              <input type="text" id="activo2" name="activo2" placeholder="Ej: GD30, ALUA, SPY" list="sugerencias-activos" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+              <label for="rango">Período</label>
+              <select id="rango" name="rango">
+                <option value="1mo">1 mes</option>
+                <option value="3mo">3 meses</option>
+                <option value="6mo" selected>6 meses</option>
+                <option value="1y">1 año</option>
+                <option value="2y">2 años</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button type="submit" id="btn-graficar">Graficar ratio</button>
+            </div>
+          </div>
+        </form>
+
+        <datalist id="sugerencias-activos">
+          <option value="AL30">
+          <option value="GD30">
+          <option value="AL29">
+          <option value="GD29">
+          <option value="AL35">
+          <option value="GD35">
+          <option value="GGAL">
+          <option value="PAMP">
+          <option value="YPFD">
+          <option value="ALUA">
+          <option value="BMA">
+          <option value="TXAR">
+          <option value="SUPV">
+          <option value="CRES">
+          <option value="AAPL">
+          <option value="MSFT">
+          <option value="SPY">
+          <option value="QQQ">
+          <option value="MELI">
+        </datalist>
+
+        <div class="result-wrap result-wrap-arbitraje">
+          <div id="mensaje" class="result-block empty" role="status" aria-live="polite">Elegí los dos activos y hacé clic en "Graficar ratio".</div>
+          <div id="chart-wrap" class="chart-wrap" style="display: none;">
+            <p id="chart-title" class="chart-title"></p>
+            <canvas id="chart-ratio" aria-label="Gráfico del ratio entre los dos activos"></canvas>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var BASE = "https://data912.com";
+      var chartInstance = null;
+
+      function $(id) { return document.getElementById(id); }
+
+      function showMessage(text, isError) {
+        var el = $("mensaje");
+        var wrap = $("chart-wrap");
+        el.textContent = text;
+        el.className = "result-block " + (isError ? "error" : "empty");
+        el.style.display = "block";
+        wrap.style.display = "none";
+      }
+
+      function showChart(title) {
+        $("mensaje").style.display = "none";
+        $("chart-title").textContent = title;
+        $("chart-wrap").style.display = "block";
+      }
+
+      function daysForRange(range) {
+        var map = { "1mo": 31, "3mo": 92, "6mo": 183, "1y": 365, "2y": 730 };
+        return map[range] || 183;
+      }
+
+      function fetchOneEndpoint(url) {
+        return fetch(url).then(function (r) {
+          if (!r.ok) return null;
+          return r.json().then(function (arr) {
+            return Array.isArray(arr) && arr.length > 0 ? arr : null;
+          });
+        }).catch(function () { return null; });
+      }
+
+      function fetchHistoricalData(ticker) {
+        var t = encodeURIComponent(ticker.toUpperCase());
+        var endpoints = [
+          BASE + "/historical/bonds/" + t,
+          BASE + "/historical/stocks/" + t,
+          BASE + "/historical/cedears/" + t
+        ];
+        return endpoints.reduce(function (prev, url) {
+          return prev.then(function (data) {
+            if (data) return data;
+            return fetchOneEndpoint(url);
+          });
+        }, Promise.resolve(null));
+      }
+
+      function rawToSeries(raw, maxDays) {
+        if (!raw || !raw.length) return [];
+        var cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - maxDays);
+        var out = [];
+        for (var i = 0; i < raw.length; i++) {
+          var r = raw[i];
+          var c = r && (r.c != null ? r.c : r.close);
+          if (typeof c !== "number" || isNaN(c) || c <= 0) continue;
+          var d = r.date;
+          if (!d) continue;
+          var dateObj = new Date(d);
+          if (dateObj.getTime && dateObj.getTime() < cutoff.getTime()) continue;
+          out.push({ date: d, close: c });
+        }
+        out.sort(function (a, b) { return a.date.localeCompare(b.date); });
+        return out;
+      }
+
+      function alignAndRatio(series1, series2) {
+        var byDate1 = {};
+        series1.forEach(function (p) { byDate1[p.date] = p.close; });
+        var byDate2 = {};
+        series2.forEach(function (p) { byDate2[p.date] = p.close; });
+        var dates = Object.keys(byDate1).filter(function (d) {
+          var c2 = byDate2[d];
+          return c2 != null && c2 !== 0 && !isNaN(c2);
+        });
+        dates.sort();
+        var labels = [];
+        var ratios = [];
+        dates.forEach(function (d) {
+          labels.push(new Date(d + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "2-digit" }));
+          ratios.push(byDate1[d] / byDate2[d]);
+        });
+        return { labels: labels, values: ratios };
+      }
+
+      function drawChart(labels, values, label1, label2) {
+        var canvas = $("chart-ratio");
+        if (chartInstance) chartInstance.destroy();
+
+        var ctx = canvas.getContext("2d");
+        chartInstance = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: "Ratio (" + label1 + " / " + label2 + ")",
+              data: values,
+              borderColor: "rgba(88, 166, 255, 0.9)",
+              backgroundColor: "rgba(88, 166, 255, 0.15)",
+              fill: true,
+              tension: 0.2,
+              pointRadius: 0,
+              pointHoverRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 2,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: "index",
+                intersect: false,
+                callbacks: {
+                  label: function (ctx) {
+                    var v = ctx.raw;
+                    return "Ratio: " + (v != null ? Number(v).toFixed(4) : "");
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                grid: { color: "rgba(255,255,255,0.06)" },
+                ticks: { color: "#8b949e", maxTicksLimit: 12 }
+              },
+              y: {
+                grid: { color: "rgba(255,255,255,0.06)" },
+                ticks: { color: "#8b949e" }
+              }
+            }
+          }
+        });
+      }
+
+      function run() {
+        var a1 = (($("activo1").value || "").trim().toUpperCase()) || "";
+        var a2 = (($("activo2").value || "").trim().toUpperCase()) || "";
+        var range = $("rango").value || "6mo";
+        var maxDays = daysForRange(range);
+
+        if (!a1 || !a2) {
+          showMessage("Ingresá los dos activos (símbolos).", true);
+          return;
+        }
+        if (a1 === a2) {
+          showMessage("Elegí dos activos distintos.", true);
+          return;
+        }
+
+        showMessage("Cargando " + a1 + " y " + a2 + " desde data912.com…", false);
+
+        Promise.all([fetchHistoricalData(a1), fetchHistoricalData(a2)])
+          .then(function (results) {
+            if (!results[0] || results[0].length === 0) {
+              showMessage("No hay datos para \"" + a1 + "\". Probá con bonos (AL30, GD30), acciones (GGAL, PAMP) o cedears (AAPL, MELI).", true);
+              return;
+            }
+            if (!results[1] || results[1].length === 0) {
+              showMessage("No hay datos para \"" + a2 + "\". Revisá el símbolo en data912.com.", true);
+              return;
+            }
+
+            var s1 = rawToSeries(results[0], maxDays);
+            var s2 = rawToSeries(results[1], maxDays);
+
+            if (!s1.length) {
+              showMessage("No hay datos de \"" + a1 + "\" en el período elegido.", true);
+              return;
+            }
+            if (!s2.length) {
+              showMessage("No hay datos de \"" + a2 + "\" en el período elegido.", true);
+              return;
+            }
+
+            var aligned = alignAndRatio(s1, s2);
+            if (!aligned.labels.length) {
+              showMessage("No hay fechas en común entre ambos activos en este período.", true);
+              return;
+            }
+
+            showChart("Ratio: " + a1 + " / " + a2);
+            drawChart(aligned.labels, aligned.values, a1, a2);
+          })
+          .catch(function (err) {
+            showMessage("Error: " + (err.message || "revisá tu conexión").trim(), true);
+          });
+      }
+
+      $("form-arbitraje").addEventListener("submit", function (e) {
+        e.preventDefault();
+        run();
+      });
+    })();
+  </script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>

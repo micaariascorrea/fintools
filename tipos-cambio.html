@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tipos de cambio | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+      <h1>Financial Tools</h1>
+      <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Tipos de cambio</h2>
+        <p class="tool-desc">Dólar MEP y CCL al último cierre.</p>
+
+        <div class="carry-actions">
+          <button type="button" id="btn-actualizar-tc">Actualizar datos</button>
+        </div>
+
+        <div class="result-wrap">
+          <div id="mensaje" class="result-block empty" role="status">Cargando…</div>
+          <div id="tc-wrap" class="result-table-wrap" style="display: none;">
+            <table class="result-table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Bid</th>
+                  <th>Ask</th>
+                  <th>Cierre</th>
+                </tr>
+              </thead>
+              <tbody id="tc-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+      var BASE = "https://data912.com";
+      function $(id) { return document.getElementById(id); }
+
+      function format(n) {
+        return n != null && !isNaN(n) ? n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+      }
+
+      function run() {
+        $("mensaje").textContent = "Cargando…";
+        $("mensaje").style.display = "block";
+        $("tc-wrap").style.display = "none";
+
+        Promise.all([
+          fetch(BASE + "/live/mep").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
+          fetch(BASE + "/live/ccl").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+        ]).then(function (results) {
+          var mep = results[0] || [];
+          var ccl = results[1] || [];
+          var mepRow = mep.length ? mep[0] : null;
+          var cclRow = ccl.length ? ccl[0] : null;
+
+          var rows = [];
+          if (mepRow && (mepRow.mark != null || mepRow.close != null)) {
+            rows.push({
+              tipo: "Dólar MEP",
+              bid: mepRow.bid,
+              ask: mepRow.ask,
+              close: mepRow.close,
+              mark: mepRow.mark
+            });
+          }
+          if (cclRow && (cclRow.CCL_mark != null || cclRow.CCL_close != null)) {
+            rows.push({
+              tipo: "Dólar CCL",
+              bid: cclRow.CCL_bid,
+              ask: cclRow.CCL_ask,
+              close: cclRow.CCL_close,
+              mark: cclRow.CCL_mark
+            });
+          }
+
+          $("mensaje").style.display = "none";
+          $("tc-wrap").style.display = "block";
+
+          var tbody = $("tc-body");
+          tbody.innerHTML = "";
+          rows.forEach(function (r) {
+            var tr = document.createElement("tr");
+            tr.innerHTML = "<td>" + r.tipo + "</td><td>$ " + format(r.bid) + "</td><td>$ " + format(r.ask) + "</td><td>$ " + format(r.close) + "</td>";
+            tbody.appendChild(tr);
+          });
+        }).catch(function (err) {
+          $("mensaje").textContent = "Error: " + (err.message || "revisá tu conexión");
+          $("mensaje").className = "result-block error";
+        });
+      }
+
+      run();
+      var btnTc = $("btn-actualizar-tc");
+      if (btnTc) btnTc.addEventListener("click", run);
+    })();
+  </script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>

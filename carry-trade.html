@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carry Trade | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+      <h1>Financial Tools</h1>
+      <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Carry Trade</h2>
+        <p class="tool-desc">Rendimiento estimado de mantener activos en ARS hasta vencimiento y convertir a MEP.</p>
+
+        <div class="carry-actions">
+          <button type="button" id="btn-actualizar">Actualizar datos</button>
+          <span id="mep-actual" class="mep-actual"></span>
+        </div>
+
+        <div class="result-wrap">
+          <div id="mensaje" class="result-block empty" role="status" aria-live="polite">Cargando precios y MEP…</div>
+          <div id="table-wrap" class="result-table-wrap" style="display: none;">
+            <table class="result-table" id="tabla-carry">
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Precio</th>
+                  <th>Días</th>
+                  <th>TEM</th>
+                  <th>Carry MEP actual</th>
+                  <th>Carry 1200</th>
+                  <th>Carry 1300</th>
+                  <th>Carry 1400</th>
+                  <th>Carry 1500</th>
+                  <th>Dólar Breakeven</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <div id="chart-scatter-wrap" class="chart-wrap" style="margin-top: 1.5rem;">
+              <p class="chart-title">Dispersión: Días al vencimiento vs Carry (MEP actual)</p>
+              <canvas id="chart-scatter" aria-label="Gráfico de dispersión carry"></canvas>
+            </div>
+            <div id="breakeven-section" class="breakeven-section" style="margin-top: 2rem;">
+              <h3 class="breakeven-title">Dólar Breakeven</h3>
+              <p class="breakeven-desc">Los instrumentos que están por encima de la banda de flotación son los que tienen mayor rendimiento.</p>
+              <p id="mep-utilizado" class="mep-utilizado"></p>
+              <div class="breakeven-input-wrap">
+                <label for="mep-personalizado">Ingresá un valor del dólar personalizado:</label>
+                <input type="number" id="mep-personalizado" min="1" step="1" placeholder="Ej. 1400" aria-label="Valor del dólar MEP personalizado">
+              </div>
+              <div id="chart-breakeven-wrap" class="chart-wrap">
+                <canvas id="chart-breakeven" aria-label="Gráfico dólar breakeven por instrumento"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+      var BASE = "https://data912.com";
+
+      var DIAS_MAP = {
+        T13F6: 4, S27F6: 18, S16M6: 35, TTM26: 35, TZXM6: 50, S17A6: 67, S30A6: 80, S29Y6: 109,
+        T30J6: 141, TTJ26: 141, S31L6: 172, S31G6: 203, S30O6: 263, S30N6: 294, TTD26: 309,
+        T15E7: 340, T30A7: 445, T31Y7: 476, T30J7: 506, TTS26: 219,
+        M27F6: 18, M31G6: 140, S30A6: 80, X29Y6: 95, X30N6: 120, X31L6: 172,
+        D27F6: 18, D30A6: 80, S29Y6: 109, BDC28: 45, TO26: 90, TX26: 60, TX28: 120,
+        TZX26: 180, TZX27: 365, TZX28: 730, TZXD6: 180, TZXD7: 545, TZXM7: 870,
+        PBY26: 90, BPA7D: 60, BPB7D: 90, BPC7D: 120, BPD7D: 150
+      };
+
+      function $(id) { return document.getElementById(id); }
+      var carryChartInstance = null;
+      var breakevenChartInstance = null;
+      function pricePer100(p) {
+        if (p == null || isNaN(p)) return null;
+        return p > 5000 ? p / 1000 : p;
+      }
+
+      function tem(price100, days) {
+        if (!price100 || price100 <= 0 || !days || days <= 0) return null;
+        return (Math.pow(100 / price100, 30 / days) - 1) * 100;
+      }
+
+      function carry(price100, mepToday, mepFuture) {
+        if (!price100 || price100 <= 0 || !mepToday || mepToday <= 0 || !mepFuture || mepFuture <= 0) return null;
+        return ((100 * mepToday) / (mepFuture * price100) - 1) * 100;
+      }
+
+      function formatNum(n, dec) {
+        if (n == null || isNaN(n)) return "—";
+        return n.toFixed(dec || 2);
+      }
+
+      function run() {
+        var msg = $("mensaje");
+        var wrap = $("table-wrap");
+        var tbody = document.querySelector("#tabla-carry tbody");
+        var mepEl = $("mep-actual");
+
+        msg.textContent = "Cargando precios y MEP…";
+        msg.className = "result-block empty";
+        msg.style.display = "block";
+        wrap.style.display = "none";
+
+        Promise.all([
+          fetch(BASE + "/live/mep").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
+          fetch(BASE + "/live/arg_bonds").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
+          fetch(BASE + "/live/arg_notes").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+        ]).then(function (results) {
+          var mepArr = results[0];
+          var bonds = results[1] || [];
+          var notes = results[2] || [];
+
+          var mepMark = null;
+          if (mepArr && mepArr.length && mepArr[0].mark != null) mepMark = mepArr[0].mark;
+
+          var all = [];
+          bonds.forEach(function (b) {
+            all.push({ symbol: b.symbol, c: b.c != null ? b.c : b.px_bid, pct: b.pct_change });
+          });
+          notes.forEach(function (n) {
+            all.push({ symbol: n.symbol, c: n.c != null ? n.c : n.px_bid, pct: n.pct_change });
+          });
+
+          var rows = [];
+          var mepScenarios = [1200, 1300, 1400, 1500];
+
+          all.forEach(function (item) {
+            var sym = item.symbol;
+            var days = DIAS_MAP[sym];
+            if (days == null) return;
+            var price100 = pricePer100(item.c);
+            if (price100 == null || price100 <= 0) return;
+            var temVal = tem(price100, days);
+            var carryActual = mepMark != null ? carry(price100, mepMark, mepMark) : null;
+            var carry1200 = carry(price100, mepMark || 1400, 1200);
+            var carry1300 = carry(price100, mepMark || 1400, 1300);
+            var carry1400 = carry(price100, mepMark || 1400, 1400);
+            var carry1500 = carry(price100, mepMark || 1400, 1500);
+            var breakevenMep = mepMark != null && price100 > 0 ? (100 * mepMark) / price100 : null;
+            rows.push({
+              symbol: sym,
+              price: item.c,
+              price100: price100,
+              days: days,
+              tem: temVal,
+              carryActual: carryActual,
+              carry1200: carry1200,
+              carry1300: carry1300,
+              carry1400: carry1400,
+              carry1500: carry1500,
+              breakeven: breakevenMep
+            });
+          });
+
+          rows.sort(function (a, b) {
+            var ca = a.carryActual != null ? a.carryActual : -1e9;
+            var cb = b.carryActual != null ? b.carryActual : -1e9;
+            return cb - ca;
+          });
+
+          if (!rows.length) {
+            msg.textContent = "No se encontraron instrumentos con días al vencimiento cargados. Revisá la conexión.";
+            msg.className = "result-block error";
+            return;
+          }
+
+          mepEl.textContent = mepMark != null ? "MEP actual: $" + formatNum(mepMark, 2) : "";
+          msg.style.display = "none";
+          wrap.style.display = "block";
+
+          var mepUtilizado = $("mep-utilizado");
+          if (mepUtilizado) mepUtilizado.textContent = mepMark != null ? "MEP Actual utilizado para los cálculos: $" + formatNum(mepMark, 2) : "";
+          var inputMep = $("mep-personalizado");
+          if (inputMep) {
+            inputMep.value = mepMark != null ? String(Math.round(mepMark)) : "";
+            inputMep.placeholder = mepMark != null ? "Ej. " + Math.round(mepMark) : "Ej. 1400";
+          }
+
+          window._carryRows = rows;
+          window._carryMep = mepMark;
+          drawScatter(rows);
+          drawBreakevenChart(rows, mepMark);
+
+          tbody.innerHTML = "";
+          rows.forEach(function (r) {
+            var tr = document.createElement("tr");
+            var cls = function (v) {
+              if (v == null || isNaN(v)) return "";
+              return v >= 0 ? "result-row-ok" : "result-row-excedido";
+            };
+            tr.innerHTML =
+              "<td>" + r.symbol + "</td>" +
+              "<td>$ " + formatNum(r.price100, 2) + "</td>" +
+              "<td>" + r.days + "</td>" +
+              "<td>" + formatNum(r.tem, 2) + "%</td>" +
+              "<td class=\"" + cls(r.carryActual) + "\">" + formatNum(r.carryActual, 1) + "%</td>" +
+              "<td class=\"" + cls(r.carry1200) + "\">" + formatNum(r.carry1200, 1) + "%</td>" +
+              "<td class=\"" + cls(r.carry1300) + "\">" + formatNum(r.carry1300, 1) + "%</td>" +
+              "<td class=\"" + cls(r.carry1400) + "\">" + formatNum(r.carry1400, 1) + "%</td>" +
+              "<td class=\"" + cls(r.carry1500) + "\">" + formatNum(r.carry1500, 1) + "%</td>" +
+              "<td>" + (r.breakeven != null ? "$ " + formatNum(r.breakeven, 2) : "—") + "</td>";
+            tbody.appendChild(tr);
+          });
+        }).catch(function (err) {
+          $("mensaje").textContent = "Error: " + (err.message || "revisá tu conexión");
+          $("mensaje").className = "result-block error";
+        });
+      }
+
+      function drawScatter(rows) {
+        var canvas = $("chart-scatter");
+        if (!canvas) return;
+        if (carryChartInstance) carryChartInstance.destroy();
+        var valid = rows.filter(function (r) {
+          return r.days != null && r.carryActual != null && !isNaN(r.carryActual);
+        });
+        if (!valid.length) return;
+        var ctx = canvas.getContext("2d");
+        carryChartInstance = new Chart(ctx, {
+          type: "scatter",
+          data: {
+            datasets: [{
+              label: "Títulos",
+              data: valid.map(function (r) { return { x: r.days, y: r.carryActual, symbol: r.symbol }; }),
+              backgroundColor: "rgba(88, 166, 255, 0.6)",
+              borderColor: "rgba(88, 166, 255, 0.9)",
+              pointRadius: 6,
+              pointHoverRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            aspectRatio: 2,
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    var sym = ctx.raw.symbol || "";
+                    return (sym ? sym + " — " : "") + "Días: " + ctx.raw.x + ", Carry: " + formatNum(ctx.raw.y, 1) + "%";
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                title: { display: true, text: "Días al vencimiento", color: "#8b949e" },
+                grid: { color: "rgba(255,255,255,0.06)" },
+                ticks: { color: "#8b949e" }
+              },
+              y: {
+                title: { display: true, text: "Carry % (MEP actual)", color: "#8b949e" },
+                grid: { color: "rgba(255,255,255,0.06)" },
+                ticks: { color: "#8b949e" }
+              }
+            }
+          }
+        });
+      }
+
+      function drawBreakevenChart(rows, mepLine) {
+        var canvas = $("chart-breakeven");
+        if (!canvas) return;
+        if (breakevenChartInstance) breakevenChartInstance.destroy();
+        var valid = rows.filter(function (r) { return r.breakeven != null && !isNaN(r.breakeven); });
+        if (!valid.length) return;
+        var ctx = canvas.getContext("2d");
+        var labels = valid.map(function (r) { return r.symbol; });
+        var values = valid.map(function (r) { return r.breakeven; });
+        var mepVal = (mepLine != null && !isNaN(mepLine)) ? mepLine : (values.length ? Math.max.apply(null, values) * 0.6 : 1000);
+        var lineDataset = {
+          label: "MEP (banda de flotación)",
+          data: labels.map(function () { return mepVal; }),
+          borderColor: "rgba(255, 180, 0, 0.9)",
+          backgroundColor: "transparent",
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+          type: "line"
+        };
+        breakevenChartInstance = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Dólar Breakeven",
+                data: values,
+                backgroundColor: values.map(function (v) {
+                  return v > mepVal ? "rgba(88, 166, 255, 0.7)" : "rgba(139, 148, 158, 0.5)";
+                }),
+                borderColor: values.map(function (v) {
+                  return v > mepVal ? "rgba(88, 166, 255, 0.9)" : "rgba(139, 148, 158, 0.7)";
+                }),
+                borderWidth: 1
+              },
+              lineDataset
+            ]
+          },
+          options: {
+            responsive: true,
+            aspectRatio: 2,
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    if (ctx.datasetIndex === 0) return ctx.dataset.label + ": $ " + formatNum(ctx.raw, 2);
+                    return ctx.dataset.label + ": $ " + formatNum(ctx.raw, 2);
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                title: { display: true, text: "Ticker", color: "#8b949e" },
+                grid: { display: false },
+                ticks: { color: "#8b949e", maxRotation: 45 }
+              },
+              y: {
+                title: { display: true, text: "Dólar Breakeven ($)", color: "#8b949e" },
+                grid: { color: "rgba(255,255,255,0.06)" },
+                ticks: { color: "#8b949e" }
+              }
+            }
+          }
+        });
+      }
+
+      var inputMep = $("mep-personalizado");
+      if (inputMep) {
+        inputMep.addEventListener("input", function () {
+          var rows = window._carryRows;
+          if (!rows || !rows.length) return;
+          var v = parseFloat(inputMep.value);
+          var mepLine = (isNaN(v) || v <= 0) ? window._carryMep : v;
+          drawBreakevenChart(rows, mepLine);
+        });
+      }
+
+      $("btn-actualizar").addEventListener("click", run);
+      run();
+    })();
+  </script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>

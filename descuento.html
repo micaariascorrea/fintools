@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Descuento | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+      <h1>Financial Tools</h1>
+      <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Descuento</h2>
+        <p class="tool-desc">Valor actual a partir del valor nominal, tasa y plazos. Base 365 días.</p>
+
+        <form id="form-descuento" novalidate action="javascript:void(0);">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="valor-nominal">Valor nominal</label>
+              <input type="text" id="valor-nominal" name="valor_nominal" placeholder="Ej: 1.000.000" inputmode="decimal" autocomplete="off" required data-decimales="2">
+            </div>
+            <div class="form-group">
+              <label for="tasa">Tasa (% anual)</label>
+              <input type="text" id="tasa" name="tasa" placeholder="Ej: 30" inputmode="decimal" autocomplete="off" required data-decimales="2">
+            </div>
+            <div class="form-group">
+              <label for="fecha-acreditacion">Fecha de acreditación</label>
+              <input type="date" id="fecha-acreditacion" name="fecha_acreditacion" required>
+            </div>
+            <div class="form-group">
+              <label for="fecha-hoy">Fecha de hoy</label>
+              <input type="date" id="fecha-hoy" name="fecha_hoy" required>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-calcular">Calcular</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="result-wrap">
+          <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
+          <div class="result-actions">
+            <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      function parseNum(str) {
+        if (typeof str !== "string") return NaN;
+        var s = str.trim().replace(/\./g, "").replace(",", ".");
+        return parseFloat(s) || NaN;
+      }
+
+      /** Formato para inputs: miles con punto, decimales con coma (como en el resto de la web) */
+      function formatInputMonto(num, decimales) {
+        if (isNaN(num) || num === "") return "";
+        var dec = decimales === undefined ? 2 : decimales;
+        var fixed = dec === 0 ? String(Math.round(num)) : (typeof num === "number" ? num.toFixed(dec) : parseFloat(num).toFixed(dec));
+        var parts = fixed.split(".");
+        var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        if (dec === 0) return intPart;
+        return intPart + "," + (parts[1] || "00");
+      }
+
+      function formatoNumero(num, decimales) {
+        if (num === null || num === undefined || isNaN(num)) return "N/A";
+        var dec = decimales === undefined ? 2 : decimales;
+        var fixed = dec === 0 ? String(Math.round(num)) : num.toFixed(dec);
+        var parts = fixed.split(".");
+        var intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        if (dec === 0) return intPart;
+        return intPart + "," + (parts[1] || "00");
+      }
+
+      function diasEntre(fechaMenor, fechaMayor) {
+        var a = new Date(fechaMenor);
+        var b = new Date(fechaMayor);
+        var diff = b.getTime() - a.getTime();
+        return Math.round(diff / (1000 * 60 * 60 * 24));
+      }
+
+      var form = document.getElementById("form-descuento");
+      var resultadoEl = document.getElementById("resultado");
+      var btnCalcular = document.getElementById("btn-calcular");
+      var btnCopiar = document.getElementById("btn-copiar");
+      function calcular() {
+        var vn = parseNum(document.getElementById("valor-nominal").value);
+        var tasa = parseNum(document.getElementById("tasa").value);
+        var fechaAcred = document.getElementById("fecha-acreditacion").value;
+        var fechaHoy = document.getElementById("fecha-hoy").value;
+
+        resultadoEl.classList.remove("empty", "error", "has-result");
+
+        if (isNaN(vn) || vn <= 0) {
+          resultadoEl.textContent = "Ingresá un valor nominal válido.";
+          resultadoEl.classList.add("error");
+          return;
+        }
+        if (isNaN(tasa) || tasa < 0) {
+          resultadoEl.textContent = "Ingresá una tasa válida.";
+          resultadoEl.classList.add("error");
+          return;
+        }
+        if (!fechaAcred || !fechaHoy) {
+          resultadoEl.textContent = "Seleccioná ambas fechas.";
+          resultadoEl.classList.add("error");
+          return;
+        }
+
+        var dias = diasEntre(fechaHoy, fechaAcred);
+
+        if (dias < 0) {
+          resultadoEl.textContent = "La fecha de acreditación debe ser posterior a la fecha de hoy.";
+          resultadoEl.classList.add("error");
+          return;
+        }
+        if (dias === 0) {
+          resultadoEl.textContent = "Valor actual (mismo día): " + formatoNumero(vn, 2) + "\nDías: 0";
+          resultadoEl.classList.add("has-result");
+          window._lastResultText = "Valor actual: " + formatoNumero(vn, 2);
+          return;
+        }
+
+        var factor = 1 + (tasa / 100) * (dias / 365);
+        var valorActual = vn / factor;
+
+        var texto = "Valor nominal: " + formatoNumero(vn, 2) + "\n";
+        texto += "Tasa: " + formatoNumero(tasa, 2) + "% anual\n";
+        texto += "Fecha hoy: " + fechaHoy + " | Fecha acreditación: " + fechaAcred + "\n";
+        texto += "Días: " + dias + " (base 365)\n\n";
+        texto += "Valor actual: " + formatoNumero(valorActual, 2);
+
+        resultadoEl.textContent = texto;
+        resultadoEl.classList.add("has-result");
+        window._lastResultText = texto;
+      }
+
+      btnCalcular.addEventListener("click", calcular);
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        calcular();
+      });
+
+      btnCopiar.addEventListener("click", function () {
+        var t = window._lastResultText;
+        if (!t) {
+          resultadoEl.textContent = "No hay resultado. Calcule primero.";
+          resultadoEl.classList.add("error");
+          return;
+        }
+        navigator.clipboard.writeText(t).then(function () {
+          var orig = btnCopiar.innerHTML;
+          btnCopiar.innerHTML = "✓";
+          setTimeout(function () { btnCopiar.innerHTML = orig; }, 1500);
+        });
+      });
+
+      [].forEach.call(form.querySelectorAll("#valor-nominal, #tasa"), function (input) {
+        var dec = parseInt(input.getAttribute("data-decimales"), 10) || 2;
+        input.addEventListener("blur", function () {
+          var num = parseNum(input.value);
+          if (!isNaN(num) && input.value.trim() !== "") {
+            input.value = formatInputMonto(num, dec);
+          }
+        });
+        input.addEventListener("focus", function () {
+          var num = parseNum(input.value);
+          if (!isNaN(num)) {
+            input.value = dec === 0 ? String(Math.round(num)) : num.toFixed(dec).replace(".", ",");
+          }
+        });
+      });
+    })();
+  </script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>
