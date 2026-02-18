@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BTC vs NASDAQ | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .btc-nasdaq-chart-wrap { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1rem; margin: 1rem 0; min-height: 380px; }
+    .btc-nasdaq-chart-wrap .chart-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary); }
+    .btc-nasdaq-legend { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
+    .btc-nasdaq-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+    .btc-nasdaq-legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .btc-nasdaq-legend .dot-btc { background: #f7931a; }
+    .btc-nasdaq-legend .dot-nasdaq { background: #58a6ff; }
+    .chart-sources { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.75rem; margin-bottom: 0; }
+    .chart-sources a { color: var(--accent); }
+  </style>
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+        <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+        <h1>Financial Tools</h1>
+        <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">BTC vs NASDAQ</h2>
+        <p class="tool-desc">Evolución del precio de Bitcoin (BTC) y del índice NASDAQ desde 2016. Ambas series normalizadas a base 100 en la primera fecha para comparar rendimiento relativo.</p>
+
+        <div class="form-actions" style="margin-bottom:1rem;">
+          <button type="button" class="btn" id="btnCargar">Cargar gráfico</button>
+        </div>
+
+        <div id="error" class="result-block error" style="display:none;" role="alert"></div>
+        <div id="loading" class="result-block empty" style="display:none;">Cargando datos…</div>
+        <div id="fallbackNote" class="result-block warning" style="display:none; margin-top:0.5rem;" role="status"></div>
+
+        <div id="chartContainer" class="btc-nasdaq-chart-wrap" style="display:none;">
+          <p class="chart-title">Evolución anual BTC y NASDAQ</p>
+          <canvas id="canvasBtcNasdaq" width="800" height="360" style="max-width:100%; height:auto;" aria-label="Gráfico de evolución BTC y NASDAQ"></canvas>
+          <div class="btc-nasdaq-legend">
+            <span><span class="dot dot-btc" aria-hidden="true"></span> Bitcoin (BTC)</span>
+            <span><span class="dot dot-nasdaq" aria-hidden="true"></span> NASDAQ</span>
+          </div>
+          <p class="chart-sources">Fuentes: BTC — <a href="https://www.coinbase.com/es-ar/price/bitcoin" target="_blank" rel="noopener">Coinbase</a>. NASDAQ — <a href="https://data912.com/" target="_blank" rel="noopener">Data912</a> (índice sintético 101 componentes).</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span class="footer-contact-label">Contacto:</span>
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="assets/ticker.js"></script>
+  <script src="assets/js/btc-nasdaq.js"></script>
+  <script>
+    (function () {
+      var BN = window.BtcNasdaq;
+      function $(id) { return document.getElementById(id); }
+      function showError(msg) {
+        $('error').textContent = msg;
+        $('error').style.display = 'block';
+        $('chartContainer').style.display = 'none';
+      }
+      function hideError() { $('error').style.display = 'none'; }
+      function setLoading(show, message) {
+        var el = $('loading');
+        el.style.display = show ? 'block' : 'none';
+        if (message != null) el.textContent = message;
+        if (!show) $('chartContainer').style.display = 'block';
+      }
+
+      $('btnCargar').addEventListener('click', function () {
+        hideError();
+        $('fallbackNote').style.display = 'none';
+        setLoading(true, 'Cargando datos…');
+        var from2016 = 1451606400;
+        var toNow = Math.floor(Date.now() / 1000);
+        function onNasdaqProgress(p) {
+          if (p.phase === 'loading') setLoading(true, 'Cargando componentes (' + p.current + '/101)');
+          else if (p.phase === 'building') setLoading(true, 'Armando índice (' + p.validCount + ' tickers válidos)');
+        }
+        Promise.all([
+          BN.fetchBtcRange(from2016, toNow),
+          BN.fetchNasdaqRange(from2016, toNow, onNasdaqProgress)
+        ]).then(function (results) {
+          var btcSeries = results[0];
+          var nasdaqResult = results[1];
+          var nasdaqSeries = nasdaqResult && nasdaqResult.series ? nasdaqResult.series : (Array.isArray(nasdaqResult) ? nasdaqResult : []);
+          var fallback = nasdaqResult && nasdaqResult.fallback;
+          var validTickerCount = nasdaqResult && nasdaqResult.validTickerCount;
+          if (!btcSeries || btcSeries.length < 2) {
+            setLoading(false);
+            showError('No se pudieron cargar los datos de Bitcoin. Revisá tu conexión.');
+            return;
+          }
+          if (!nasdaqSeries || nasdaqSeries.length < 2) {
+            setLoading(false);
+            showError('No se pudieron cargar los datos del NASDAQ. Probá de nuevo.');
+            return;
+          }
+          var btcAnnual = BN.resampleToAnnual(btcSeries);
+          var nasdaqAnnual = BN.resampleToAnnual(nasdaqSeries);
+          var aligned = BN.alignAndNormalizeAnnual(btcAnnual, nasdaqAnnual);
+          if (!aligned.dates.length) {
+            setLoading(false);
+            showError('No hay años en común entre BTC y NASDAQ en el rango.');
+            return;
+          }
+          setLoading(false);
+          $('chartContainer').style.display = 'block';
+          requestAnimationFrame(function () {
+            BN.drawDualLineChart($('canvasBtcNasdaq'), aligned);
+          });
+          var notes = [];
+          if (fallback === 'qqq') {
+            notes.push('NASDAQ aproximado por ETF QQQ (índice no disponible vía proxy).');
+          } else if (fallback === 'synthetic') {
+            notes.push('NASDAQ: datos sintéticos (fuente no disponible). Solo referencia aproximada.');
+          }
+          if (notes.length) {
+            $('fallbackNote').textContent = notes.join(' ');
+            $('fallbackNote').style.display = 'block';
+          }
+        }).catch(function (err) {
+          setLoading(false);
+          showError(BN.normalizeErrorMessage(err));
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

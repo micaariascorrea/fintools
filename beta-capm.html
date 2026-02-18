@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beta & CAPM (real) | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .beta-helper { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.45; margin-top: 0.35rem; max-width: 36rem; }
+    .beta-results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.25rem 0 1.5rem; }
+    .beta-result-card { padding: 1rem 1.25rem; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); border-left: 4px solid var(--accent); }
+    .beta-result-card .label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+    .beta-result-card .value { font-size: 1.35rem; font-weight: 600; color: var(--text-primary); }
+    .beta-result-card .value.value-sub { font-size: 0.85rem; font-weight: normal; color: var(--text-secondary); margin-top: 0.2rem; }
+    .beta-result-card.state-above .value { color: #3fb950; }
+    .beta-result-card.state-below .value { color: #f85149; }
+    .beta-chart-wrap { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1rem; margin: 1rem 0; min-height: 360px; }
+    .beta-chart-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-primary); }
+    .data-quality-wrap { margin-bottom: 1.25rem; padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--bg-card); }
+    .data-quality-wrap .detail { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; }
+    .data-quality-wrap.sem-green { border-left: 4px solid #3fb950; }
+    .data-quality-wrap.sem-yellow { border-left: 4px solid #d29922; }
+    .data-quality-wrap.sem-red { border-left: 4px solid #f85149; }
+    .radio-group { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.35rem; }
+    .radio-label { font-weight: normal; cursor: pointer; }
+    .cer-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.25rem; }
+    .btn-secondary { background: var(--bg-card); border: 1px solid var(--border-subtle); }
+    .result-block.warning { background: rgba(210, 153, 34, 0.12); border-left: 4px solid #d29922; }
+    .chart-sources { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.75rem; margin-bottom: 0; }
+    .chart-sources a { color: var(--accent); }
+  </style>
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+        <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+        <h1>Financial Tools</h1>
+        <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Beta & CAPM (real)</h2>
+        <p class="tool-desc">Beta y CAPM en términos <strong>reales</strong> (deflactados por IPC). Solo acciones argentinas (BYMA).</p>
+
+        <form id="form-beta-capm" novalidate action="javascript:void(0);">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="assetTicker">Activo (acciones argentinas)</label>
+              <select id="assetTicker" required>
+                <option value="">— Elegir —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="benchTicker">Benchmark (acción AR o MERVAL sintético)</label>
+              <select id="benchTicker" required>
+                <option value="">— Elegir —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="ventana">Ventana</label>
+              <select id="ventana" required>
+                <option value="">— Elegir —</option>
+                <option value="6M">6M</option>
+                <option value="1Y">1Y</option>
+                <option value="3Y">3Y</option>
+                <option value="5Y">5Y</option>
+                <option value="10Y">10Y</option>
+                <option value="MAX">MAX</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="frecuencia">Frecuencia</label>
+              <select id="frecuencia" required>
+                <option value="">— Elegir —</option>
+                <option value="daily">Diaria</option>
+                <option value="weekly">Semanal</option>
+                <option value="monthly">Mensual</option>
+              </select>
+              <p class="beta-helper">La frecuencia afecta β.</p>
+              <p class="beta-helper beta-ipc-note" id="ipcEscalonesNote" style="display:none;">IPC mensual aplicado por escalones.</p>
+            </div>
+            <div class="form-group capm-mode-group">
+              <span class="label">CAPM</span>
+              <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="capmMode" value="teorico" id="capmTeorico" checked> CAPM Teórico (Rf real manual)</label>
+                <label class="radio-label"><input type="radio" name="capmMode" value="cer" id="capmCer"> CAPM Local (Rf real desde bono CER)</label>
+              </div>
+            </div>
+            <div class="form-group" id="wrapRfTeorico">
+              <label for="rfReal">Rf real anual (%)</label>
+              <input type="number" id="rfReal" step="0.1" min="-50" max="50" placeholder="Ej. 0" value="0" style="max-width:8rem;">
+              <p class="beta-helper">Rf real = tasa libre de riesgo descontando inflación.</p>
+            </div>
+            <div class="form-group" id="wrapRfCer" style="display:none;">
+              <label for="cerSelect">Bono CER</label>
+              <select id="cerSelect" style="min-width:12rem;"><option value="">— Elegir bono —</option></select>
+              <p class="beta-helper">Rf local = rendimiento real del bono CER seleccionado (incluye riesgo soberano).</p>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn" id="btnCalc">Calcular</button>
+            </div>
+          </div>
+        </form>
+
+        <div id="error" class="result-block error" style="display:none;" role="alert"></div>
+        <div id="warningCer" class="result-block warning" style="display:none;" role="status"></div>
+        <div id="loading" class="result-block empty" style="display:none;"></div>
+
+        <div id="results" style="display:none;">
+          <div id="dataQuality" class="data-quality-wrap">
+            <div id="dataQualityDetail" class="detail"></div>
+          </div>
+          <div class="beta-results-grid">
+            <div class="beta-result-card">
+              <div class="label">Beta (β)</div>
+              <div class="value" id="outBeta">—</div>
+            </div>
+            <div class="beta-result-card">
+              <div class="label">Retorno real activo (ventana)</div>
+              <div class="value" id="outRiReal">—</div>
+            </div>
+            <div class="beta-result-card">
+              <div class="label">Retorno real benchmark (ventana)</div>
+              <div class="value" id="outRmReal">—</div>
+            </div>
+            <div class="beta-result-card">
+              <div class="label">Prima de riesgo (Rm − Rf)</div>
+              <div class="value" id="outPrima">—</div>
+              <div class="value value-sub" id="outPrimaInterp">—</div>
+            </div>
+            <div class="beta-result-card">
+              <div class="label">E(Ri) real</div>
+              <div class="value" id="outERi">—</div>
+            </div>
+            <div class="beta-result-card">
+              <div class="label">Alfa de Jensen real anual (α)</div>
+              <div class="value" id="outAlpha">—</div>
+            </div>
+          </div>
+          <div class="beta-chart-wrap">
+            <div class="beta-chart-title">Security Market Line (SML) — real</div>
+            <canvas id="canvasSML" width="800" height="400" style="max-width:100%;height:auto;"></canvas>
+            <p class="chart-sources">Fuentes de datos: Precios (acciones y bonos) — <a href="https://data912.com/" target="_blank" rel="noopener">Data912</a> (Milton Cascos). IPC — <a href="https://www.argentina.gob.ar/innovacion-ciencia-y-tecnologia/gobierno-abierto/datos-abiertos/api-series-de-tiempo" target="_blank" rel="noopener">API Series de Tiempo</a>, Gobierno Argentino.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span class="footer-contact-label">Contacto:</span>
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="assets/ticker.js"></script>
+  <script src="assets/js/beta-capm.js"></script>
+  <script>
+    (function () {
+      var BC = window.BetaCapm;
+
+      function $(id) { return document.getElementById(id); }
+
+      function showError(msg) {
+        $('error').textContent = msg;
+        $('error').style.display = 'block';
+        $('results').style.display = 'none';
+      }
+      function hideError() { $('error').style.display = 'none'; }
+      function setLoading(show, message) {
+        var el = $('loading');
+        el.style.display = show ? 'block' : 'none';
+        if (message) el.textContent = message;
+      }
+
+      function loadArgStocks() {
+        var selAsset = $('assetTicker');
+        var selBench = $('benchTicker');
+        if (!selAsset || !selBench) return;
+        if (selAsset.options.length > 1 && selBench.options.length > 1) return;
+        selAsset.innerHTML = '<option value="">Cargando...</option>';
+        selBench.innerHTML = '<option value="">Cargando...</option>';
+        BC.fetchArgStocks().then(function (opts) {
+          selAsset.innerHTML = '<option value="">— Elegir —</option>';
+          (opts || []).forEach(function (o) {
+            var opt = document.createElement('option');
+            opt.value = o.value || o.label || '';
+            opt.textContent = o.label || o.value || '';
+            selAsset.appendChild(opt);
+          });
+          selBench.innerHTML = '<option value="">— Elegir —</option>';
+          var mervalOpt = document.createElement('option');
+          mervalOpt.value = 'MERVAL';
+          mervalOpt.textContent = 'MERVAL';
+          selBench.appendChild(mervalOpt);
+          (opts || []).forEach(function (o) {
+            var opt = document.createElement('option');
+            opt.value = o.value || o.label || '';
+            opt.textContent = o.label || o.value || '';
+            selBench.appendChild(opt);
+          });
+        }).catch(function () {
+          selAsset.innerHTML = '<option value="">Error al cargar acciones</option>';
+          selBench.innerHTML = '<option value="">Error al cargar acciones</option>';
+        });
+      }
+      loadArgStocks();
+
+      function isMerval(v) { return (v || '').toUpperCase() === 'MERVAL'; }
+
+      $('capmTeorico').addEventListener('change', function () {
+        $('wrapRfTeorico').style.display = this.checked ? 'block' : 'none';
+        $('wrapRfCer').style.display = this.checked ? 'none' : 'block';
+      });
+      $('capmCer').addEventListener('change', function () {
+        $('wrapRfTeorico').style.display = this.checked ? 'none' : 'block';
+        $('wrapRfCer').style.display = this.checked ? 'block' : 'none';
+        if (this.checked) loadCerOptions();
+      });
+
+      function loadCerOptions() {
+        var ventana = ($('ventana').value || '').trim();
+        var sel = $('cerSelect');
+        if (sel.options.length > 1) return;
+        sel.innerHTML = '<option value="">Cargando...</option>';
+        BC.fetchCerUniverse().then(function (u) {
+          var opts = BC.filterCerByWindow(u.options, ventana);
+          sel.innerHTML = '<option value="">— Elegir bono —</option>';
+          opts.forEach(function (o) {
+            var opt = document.createElement('option');
+            opt.value = o.value || o.ticker;
+            opt.textContent = o.label || o.ticker;
+            opt.setAttribute('data-verified', o.verified ? '1' : '0');
+            sel.appendChild(opt);
+          });
+          if (u.isFallback) sel.title = 'Lista fallback (API no devolvió bonos CER).';
+        }).catch(function (err) {
+          sel.innerHTML = '<option value="">Error: ' + (err.message || 'Cargar CER') + '</option>';
+        });
+      }
+
+      $('frecuencia').addEventListener('change', function () {
+        var f = (this.value || '').toLowerCase();
+        $('ipcEscalonesNote').style.display = (f === 'daily' || f === 'weekly') ? 'block' : 'none';
+      });
+
+      $('form-beta-capm').addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        var assetTicker = ($('assetTicker').value || '').trim().toUpperCase();
+        var benchTicker = ($('benchTicker').value || '').trim().toUpperCase();
+        var ventana = ($('ventana').value || '').trim();
+        var frecuencia = ($('frecuencia').value || '').toLowerCase();
+        var capmTeorico = $('capmTeorico').checked;
+
+        if (!assetTicker || !benchTicker || !ventana) {
+          showError('Completá activo, benchmark y ventana.');
+          return;
+        }
+        if (!frecuencia || (frecuencia !== 'daily' && frecuencia !== 'weekly' && frecuencia !== 'monthly')) {
+          showError('Elegí la frecuencia.');
+          return;
+        }
+        if (!isMerval(benchTicker) && assetTicker === benchTicker) {
+          showError('Activo y benchmark deben ser distintos.');
+          return;
+        }
+        if (isMerval(benchTicker) && frecuencia !== 'monthly') {
+          showError('Con benchmark MERVAL solo está disponible frecuencia mensual.');
+          return;
+        }
+
+        var rfPct = NaN;
+        if (capmTeorico) {
+          var rfVal = $('rfReal').value;
+          rfPct = rfVal !== '' && rfVal !== null ? parseFloat(rfVal) : 0;
+        } else {
+          var cerTicker = ($('cerSelect').value || '').trim().toUpperCase();
+          if (!cerTicker) {
+            showError('Elegí un bono CER o usá CAPM Teórico con Rf manual.');
+            return;
+          }
+        }
+
+        var months = BC.windowMonths(ventana);
+        var benchIsMerval = isMerval(benchTicker);
+
+        hideError();
+        setLoading(true, 'Cargando IPC y datos...');
+
+        function getRfReal(ipcMap) {
+          if (capmTeorico) return Promise.resolve(rfPct / 100);
+          var cerTicker = ($('cerSelect').value || '').trim().toUpperCase();
+          setLoading(true, 'Obteniendo Rf real del bono CER...');
+          return BC.fetchCerYield(cerTicker, ipcMap, months).then(function (rfDecimal) {
+            return rfDecimal;
+          });
+        }
+
+        BC.loadIpc().then(function (ipcResult) {
+          var ipcMap = BC.getIpcMap(ipcResult);
+          if (!ipcMap || Object.keys(ipcMap).length < 12) {
+            setLoading(false);
+            showError('No se pudo cargar IPC desde API oficial.');
+            return;
+          }
+          setLoading(true, 'Buscando datos...');
+
+          if (benchIsMerval) {
+            return BC.fetchSeries(assetTicker).then(function (assetData) {
+              setLoading(true, 'Construyendo MERVAL sintético (real)...');
+              return BC.buildMervalSynthetic(months, ipcMap).then(function (mervalOut) {
+                var mervalMonthly = mervalOut.series;
+                var assetMonthly = BC.resampleSeriesToMonthly(assetData);
+                var assetFiltered = BC.windowFilterMonthly(assetMonthly, months);
+                var ipcClip = BC.clipToIpcRange(assetFiltered, ipcMap);
+                if (!ipcClip.series.length) throw new Error('No hay IPC para el rango seleccionado.');
+                var assetReal = BC.deflateSeriesToReal(ipcClip.series, ipcMap);
+                var aligned = BC.alignPrices(assetReal, mervalMonthly);
+                return { aligned: aligned, ipcMap: ipcMap, ipcClip: ipcClip, avgMervalComponents: mervalOut.avgComponentsPerMonth, originalMonthsBeforeClip: assetFiltered.length };
+              });
+            });
+          }
+
+          return Promise.all([BC.fetchSeries(assetTicker), BC.fetchSeries(benchTicker)]).then(function (results) {
+            var aligned = BC.alignPrices(results[0], results[1]);
+            if (aligned.length < 2) throw new Error('No hay intersección de fechas entre activo y benchmark.');
+            var filtered = BC.windowFilterPrices(aligned, months);
+            if (filtered.length < 2) throw new Error('No hay suficientes datos en la ventana. Probá otra ventana o MAX.');
+            var realSeries;
+            var ipcClip = { series: [], clipped: false };
+            if (frecuencia === 'monthly') {
+              var monthly = BC.resampleToMonthly(filtered);
+              if (monthly.length < 2) throw new Error('Pocos meses tras resamplear.');
+              ipcClip = BC.clipToIpcRange(monthly, ipcMap);
+              if (!ipcClip.series.length) throw new Error('No hay IPC para el rango seleccionado.');
+              realSeries = BC.deflateToReal(ipcClip.series, ipcMap);
+              return { aligned: realSeries, ipcMap: ipcMap, ipcClip: ipcClip, avgMervalComponents: null, originalMonthsBeforeClip: monthly.length };
+            }
+            if (frecuencia === 'weekly') {
+              var weekly = BC.resampleToWeekly(filtered);
+              if (weekly.length < 2) throw new Error('Pocos datos tras resamplear a semanal.');
+              realSeries = BC.deflateToRealWithIpcLocf(weekly, ipcMap);
+              if (realSeries.length < 2) throw new Error('Datos insuficientes tras deflactar.');
+              return { aligned: realSeries, ipcMap: ipcMap, ipcClip: ipcClip, avgMervalComponents: null, originalMonthsBeforeClip: weekly.length };
+            }
+            realSeries = BC.deflateToRealWithIpcLocf(filtered, ipcMap);
+            if (realSeries.length < 2) throw new Error('Datos insuficientes tras deflactar.');
+            return { aligned: realSeries, ipcMap: ipcMap, ipcClip: ipcClip, avgMervalComponents: null, originalMonthsBeforeClip: filtered.length };
+          });
+        }).then(function (data) {
+          var alignedData = data.aligned;
+          if (alignedData.length < 2) {
+            setLoading(false);
+            showError('No hay suficientes datos tras alinear. Probá otra ventana.');
+            return;
+          }
+
+          var returns = BC.realLogReturns(alignedData);
+          if (returns.n < 2) {
+            setLoading(false);
+            showError('No se pudieron calcular retornos reales (pocos períodos).');
+            return;
+          }
+          if (returns.antiSplitEvents > BC.ANTI_SPLIT_MAX_EVENTS) {
+            setLoading(false);
+            showError('Serie con discontinuidades (split/no ajustado). Cambiá ventana o ticker.');
+            return;
+          }
+
+          var computed = BC.computeBeta(returns.ri, returns.rm);
+          var beforeClip = (data.originalMonthsBeforeClip != null) ? data.originalMonthsBeforeClip : alignedData.length;
+          var clipPct = (data.ipcClip.series.length && beforeClip > 0) ? 1 - data.ipcClip.series.length / beforeClip : 0;
+          var sem = BC.dataQualitySemaphore(returns.n, clipPct, computed.varRm, true);
+
+          if (sem === 'red') {
+            setLoading(false);
+            showError('Calidad de datos insuficiente: pocas observaciones (' + returns.n + '), benchmark sin variación o IPC insuficiente. No se puede calcular.');
+            return;
+          }
+
+          var cerOpt = $('cerSelect').selectedOptions && $('cerSelect').selectedOptions[0];
+          var cerUnverified = !capmTeorico && cerOpt && cerOpt.getAttribute('data-verified') === '0';
+          if (cerUnverified) {
+            $('warningCer').textContent = 'Ticker no verificado como CER; validar instrumento.';
+            $('warningCer').style.display = 'block';
+          } else {
+            $('warningCer').style.display = 'none';
+          }
+
+          return getRfReal(data.ipcMap).then(function (rf_real) {
+            setLoading(true, 'Calculando...');
+
+            if (computed.varRm <= BC.VAR_RM_EPS) {
+              setLoading(false);
+              showError('Benchmark sin variación en la ventana.');
+              return;
+            }
+
+            var beta = computed.beta;
+            var periods = BC.periodsPerYear(frecuencia);
+            var Ri_real_annual = BC.realAnnualFromLogReturns(returns.ri, periods);
+            var Rm_real_annual = BC.realAnnualFromLogReturns(returns.rm, periods);
+            if (Ri_real_annual == null || Rm_real_annual == null) {
+              setLoading(false);
+              showError('No se pudo calcular retorno real anual.');
+              return;
+            }
+
+            var marketRiskPremium = Rm_real_annual - rf_real;
+            if (!isFinite(marketRiskPremium)) {
+              setLoading(false);
+              showError('No se pudo calcular la prima de riesgo.');
+              return;
+            }
+
+            var E_Ri_real = rf_real + beta * (Rm_real_annual - rf_real);
+            var alpha_real = Ri_real_annual - E_Ri_real;
+
+            $('outBeta').textContent = beta.toFixed(4);
+            $('outRiReal').textContent = (Ri_real_annual * 100).toFixed(2) + ' %';
+            $('outRmReal').textContent = (Rm_real_annual * 100).toFixed(2) + ' %';
+            $('outPrima').textContent = (marketRiskPremium * 100).toFixed(2) + ' %';
+            var primaEps = 0.0005;
+            $('outPrimaInterp').textContent = marketRiskPremium > primaEps ? 'Mercado compensando riesgo' : (marketRiskPremium < -primaEps ? 'Mercado destruyendo prima de riesgo' : 'Mercado neutral');
+            $('outERi').textContent = (E_Ri_real * 100).toFixed(2) + ' %';
+            $('outAlpha').textContent = (alpha_real * 100).toFixed(2) + ' %';
+
+            var detail = [];
+            detail.push('n observaciones usadas: ' + returns.n);
+            detail.push('Rango: ' + (alignedData[0] && alignedData[0].date) + ' a ' + (alignedData[alignedData.length - 1] && alignedData[alignedData.length - 1].date));
+            if (returns.antiSplitApplied) detail.push('Detectadas discontinuidades de precio. Se aplicó filtro anti-split.');
+            if (returns.n < BC.minObsWarningByFreq(frecuencia)) detail.push('Pocas observaciones para esta frecuencia: beta menos robusto.');
+            if (Math.abs(computed.correlation) < BC.CORR_LOW_THRESHOLD) detail.push('Relación débil con benchmark; beta poco informativa.');
+
+            $('dataQualityDetail').textContent = detail.join(' · ');
+            var qWrap = $('dataQuality');
+            qWrap.classList.remove('sem-green', 'sem-yellow', 'sem-red');
+            qWrap.classList.add('sem-' + sem);
+            qWrap.style.display = 'block';
+
+            $('results').style.display = 'block';
+            setLoading(false);
+
+            var ventanaLabel = ventana === 'MAX' ? 'MAX' : ventana;
+            BC.drawSML($('canvasSML'), {
+              rf: rf_real,
+              Rm_real: Rm_real_annual,
+              Ri_real: Ri_real_annual,
+              beta: beta,
+              alpha: alpha_real,
+              assetTicker: assetTicker,
+              ventanaLabel: ventanaLabel
+            });
+          });
+        }).catch(function (err) {
+          setLoading(false);
+          showError(err.message || 'Error al obtener o procesar datos.');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
