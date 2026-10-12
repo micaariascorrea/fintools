@@ -143,6 +143,7 @@
 
   <script src="assets/xlsx.full.min.js"></script>
   <script src="assets/js/data912-prices.js"></script>
+  <script src="assets/js/activos-aceptados-a3-cauciones.js"></script>
   <script>
     (function () {
       "use strict";
@@ -306,6 +307,14 @@
       var A3_DEFAULT_LIST_URL = "assets/activos-aceptados-a3-cauciones.xlsx";
       var A3_DEFAULT_UPDATED = "12/10/2026";
       var a3BundledCache = null;
+
+      function a3DataFromBundledGlobal() {
+        var pack = window.A3_GARANTIAS_DEFAULT;
+        if (!pack || !Array.isArray(pack.headers) || !Array.isArray(pack.rows) || !pack.rows.length) {
+          return null;
+        }
+        return { headers: pack.headers.slice(), rows: pack.rows.slice() };
+      }
 
       function findOptionalCol(cols, candidates) {
         try {
@@ -472,11 +481,22 @@
           cb(null, a3BundledCache);
           return;
         }
+        /* Prefer embedded JS (works on GitHub Pages, Try Live, and file://). */
+        var embedded = a3DataFromBundledGlobal();
+        if (embedded) {
+          a3BundledCache = embedded;
+          cb(null, embedded);
+          return;
+        }
+        /* Fallback: fetch the committed xlsx if the script bundle is missing. */
         fetch(A3_DEFAULT_LIST_URL).then(function (r) {
           if (!r.ok) throw new Error("HTTP " + r.status);
           return r.arrayBuffer();
         }).then(function (ab) {
           var parsed = parseExcelFromArrayBuffer(ab, 2);
+          if (!parsed.headers.length || !parsed.rows.length) {
+            throw new Error("El Excel A3 incluido está vacío o mal formado.");
+          }
           a3BundledCache = parsed;
           cb(null, parsed);
         }).catch(function (err) {
