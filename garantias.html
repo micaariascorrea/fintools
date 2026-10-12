@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Calculadora de garantías | Financial Tools</title>
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .form-grid .form-group-span { grid-column: 1 / -1; }
+    .radio-group { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.35rem; }
+    .radio-label { font-weight: normal; cursor: pointer; color: var(--text-primary); font-size: 0.95rem; }
+    .radio-label input { width: auto; margin-right: 0.4rem; vertical-align: middle; }
+    .manual-portfolio-wrap { margin-top: 0.5rem; }
+    .manual-portfolio-table { width: 100%; border-collapse: collapse; margin-bottom: 0.75rem; }
+    .manual-portfolio-table th,
+    .manual-portfolio-table td { padding: 0.4rem 0.5rem; text-align: left; vertical-align: middle; }
+    .manual-portfolio-table th { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); }
+    .manual-portfolio-table input[type="text"] { width: 100%; }
+    .manual-portfolio-table .btn-row-remove {
+      padding: 0.4rem 0.65rem;
+      font-size: 0.85rem;
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+    }
+    .manual-portfolio-table .btn-row-remove:hover { color: #f85149; border-color: #f85149; }
+  </style>
 </head>
 <body class="page-interna">
   <div class="ticker-wrap" aria-label="Precios de mercado">
@@ -23,34 +43,58 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Calculadora de garantías</h2>
-        <p class="tool-desc">Simula si tu cartera alcanza para garantizar una caución. Cargá Precios, Garantías aceptadas y tu archivo con especies y VN. Descargá la plantilla, completala y subila.</p>
-
-        <div class="form-group">
-          <a href="assets/plantilla_gara.xlsx" class="btn btn-secondary" download="plantilla_gara.xlsx">Descargar plantilla</a>
-          <span class="form-hint">Completala con Código CVSA (o Ticker) y Cantidad de VN; luego subila abajo.</span>
-        </div>
+        <p class="tool-desc">Simula si tu cartera alcanza para garantizar una caución. Los precios se toman del cierre del último día hábil (misma API Data912 que el ticker). Elegí el mercado y cargá el portfolio (masiva o manual).</p>
 
         <form id="form-garantias" novalidate action="javascript:void(0);">
           <div class="form-grid">
             <div class="form-group">
-              <label for="file-precios">Precios</label>
-              <input type="file" id="file-precios" name="precios" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-            </div>
-            <div class="form-group">
-              <label for="file-garantias">Garantías aceptadas</label>
-              <input type="file" id="file-garantias" name="garantias" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-            </div>
-            <div class="form-group">
-              <label for="file-cartera">Mi cartera (archivo completado)</label>
-              <input type="file" id="file-cartera" name="cartera" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-            </div>
-            <div class="form-group">
               <label for="mercado">Mercado</label>
               <select id="mercado" name="mercado">
-                <option value="BYMA">BYMA</option>
-                <option value="MAV">MAV</option>
+                <option value="BYMA" selected>BYMA</option>
                 <option value="A3">A3</option>
               </select>
+            </div>
+            <div class="form-group" id="group-garantias-byma">
+              <label for="file-garantias">Garantías aceptadas</label>
+              <input type="file" id="file-garantias" name="garantias" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </div>
+            <div class="form-group" id="group-garantias-a3" style="display: none;">
+              <label for="file-garantias-a3">Garantías aceptadas (A3)</label>
+              <p id="a3-list-meta" class="form-hint">Activos Aceptados en Garantía — Cauciones · última actualización 12/10/2026</p>
+              <input type="file" id="file-garantias-a3" name="garantias-a3" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              <span class="form-hint">Para actualizarla, subí un archivo más nuevo en el mismo formato. Si no subís nada, se usa la lista incluida.</span>
+            </div>
+            <div class="form-group form-group-span">
+              <label>Carga de portfolio</label>
+              <div class="radio-group" role="radiogroup" aria-label="Modo de carga de portfolio">
+                <label class="radio-label"><input type="radio" name="portfolioMode" id="mode-masiva" value="masiva" checked> Carga masiva de portfolio</label>
+                <label class="radio-label"><input type="radio" name="portfolioMode" id="mode-manual" value="manual"> Carga manual de portfolio</label>
+              </div>
+            </div>
+            <div class="form-group form-group-span" id="group-cartera-masiva">
+              <label for="file-cartera">Mi cartera (archivo completado)</label>
+              <div class="form-group" style="margin-bottom: 0.75rem;">
+                <a href="assets/plantilla_gara.xlsx" class="btn btn-secondary" download="plantilla_gara.xlsx">Descargar plantilla</a>
+                <span class="form-hint">Completala con ticker, código CVSA y cantidad de VN; luego subila abajo.</span>
+              </div>
+              <input type="file" id="file-cartera" name="cartera" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </div>
+            <div class="form-group form-group-span" id="group-cartera-manual" style="display: none;">
+              <label>Portfolio manual</label>
+              <span class="form-hint">Especie: ticker (ej. AL30) o código CVSA (Caja de Valores). Cantidad de VN por fila.</span>
+              <div class="manual-portfolio-wrap">
+                <table class="manual-portfolio-table" id="manual-portfolio-table">
+                  <thead>
+                    <tr>
+                      <th>Especie (ticker o cód. CVSA)</th>
+                      <th>Cantidad de VN</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="manual-portfolio-body"></tbody>
+                </table>
+                <button type="button" id="btn-add-manual-row" class="btn btn-secondary">Agregar especie</button>
+              </div>
             </div>
             <div class="form-group">
               <label for="moneda">Moneda</label>
@@ -90,14 +134,16 @@
 
     <footer class="site-footer">
       <div class="footer-contact">
+        <span class="footer-contact-label">Contacto:</span>
         <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
         <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
       </div>
-      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
     </footer>
   </div>
 
   <script src="assets/xlsx.full.min.js"></script>
+  <script src="assets/js/data912-prices.js"></script>
+  <script src="assets/js/activos-aceptados-a3-cauciones.js"></script>
   <script>
     (function () {
       "use strict";
@@ -258,10 +304,333 @@
         }
       }
 
-      function runCalculation() {
-        var filePre = document.getElementById("file-precios").files[0];
-        var fileGar = document.getElementById("file-garantias").files[0];
+      var A3_DEFAULT_LIST_URL = "assets/activos-aceptados-a3-cauciones.xlsx";
+      var A3_DEFAULT_UPDATED = "12/10/2026";
+      var a3BundledCache = null;
+
+      function a3DataFromBundledGlobal() {
+        var pack = window.A3_GARANTIAS_DEFAULT;
+        if (!pack || !Array.isArray(pack.headers) || !Array.isArray(pack.rows) || !pack.rows.length) {
+          return null;
+        }
+        return { headers: pack.headers.slice(), rows: pack.rows.slice() };
+      }
+
+      function findOptionalCol(cols, candidates) {
+        try {
+          return findCol(cols, candidates, null, false, "");
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function resolveCarteraIdentity(row, tickerCol, cvsaCol, idCol, especieToCod) {
+        var ticker = tickerCol ? String(row[tickerCol] || "").trim().toUpperCase() : "";
+        var cvsaRaw = cvsaCol ? String(row[cvsaCol] || "").trim() : "";
+        var idVal = idCol ? String(row[idCol] || "").trim() : "";
+        var cod = null;
+        if (cvsaRaw && /^\d+$/.test(cvsaRaw)) cod = parseInt(cvsaRaw, 10);
+        if (!ticker && idVal) {
+          if (/^\d+$/.test(idVal)) {
+            if (cod == null) cod = parseInt(idVal, 10);
+          } else {
+            ticker = idVal.toUpperCase();
+          }
+        }
+        if (cod == null && ticker && especieToCod[ticker] != null) cod = especieToCod[ticker];
+        return { ticker: ticker || null, cod: cod };
+      }
+
+      function getPortfolioMode() {
+        var checked = document.querySelector('input[name="portfolioMode"]:checked');
+        return checked ? checked.value : "masiva";
+      }
+
+      function syncMercadoUi() {
+        var mercado = document.getElementById("mercado").value;
+        var isA3 = mercado === "A3";
+        document.getElementById("group-garantias-byma").style.display = isA3 ? "none" : "";
+        document.getElementById("group-garantias-a3").style.display = isA3 ? "" : "none";
+        var fileByma = document.getElementById("file-garantias");
+        if (fileByma) {
+          if (isA3) fileByma.removeAttribute("required");
+          else fileByma.setAttribute("required", "required");
+        }
+        if (isA3) updateA3ListMetaLabel();
+      }
+
+      function syncPortfolioModeUi() {
+        var mode = getPortfolioMode();
+        var isMasiva = mode === "masiva";
+        document.getElementById("group-cartera-masiva").style.display = isMasiva ? "" : "none";
+        document.getElementById("group-cartera-manual").style.display = isMasiva ? "none" : "";
+        var fileCar = document.getElementById("file-cartera");
+        if (fileCar) {
+          if (isMasiva) fileCar.setAttribute("required", "required");
+          else fileCar.removeAttribute("required");
+        }
+        if (!isMasiva) {
+          var body = document.getElementById("manual-portfolio-body");
+          if (body && !body.children.length) addManualPortfolioRow();
+        }
+      }
+
+      function addManualPortfolioRow(especie, vn) {
+        var body = document.getElementById("manual-portfolio-body");
+        if (!body) return;
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          '<td><input type="text" class="manual-especie" placeholder="AL30 o 31001" autocomplete="off"></td>' +
+          '<td><input type="text" class="manual-vn" placeholder="Ej: 100000" inputmode="decimal" autocomplete="off" data-decimales="2"></td>' +
+          '<td><button type="button" class="btn btn-row-remove" title="Quitar" aria-label="Quitar fila">✕</button></td>';
+        if (especie) tr.querySelector(".manual-especie").value = especie;
+        if (vn != null && vn !== "") tr.querySelector(".manual-vn").value = vn;
+        tr.querySelector(".btn-row-remove").addEventListener("click", function () {
+          var rows = body.querySelectorAll("tr");
+          if (rows.length <= 1) {
+            tr.querySelector(".manual-especie").value = "";
+            tr.querySelector(".manual-vn").value = "";
+            return;
+          }
+          tr.remove();
+        });
+        var vnInput = tr.querySelector(".manual-vn");
+        vnInput.addEventListener("blur", function () {
+          var num = parseInputMonto(vnInput.value);
+          if (!isNaN(num) && vnInput.value.trim() !== "") vnInput.value = formatInputMonto(num, 2);
+        });
+        vnInput.addEventListener("focus", function () {
+          var num = parseInputMonto(vnInput.value);
+          if (!isNaN(num)) vnInput.value = num.toFixed(2).replace(".", ",");
+        });
+        body.appendChild(tr);
+      }
+
+      function readManualCartera(cb) {
+        var body = document.getElementById("manual-portfolio-body");
+        var rows = [];
+        if (!body) {
+          cb(new Error("No hay filas de portfolio manual."));
+          return;
+        }
+        var trs = body.querySelectorAll("tr");
+        for (var i = 0; i < trs.length; i++) {
+          var especie = String(trs[i].querySelector(".manual-especie").value || "").trim();
+          var vnRaw = String(trs[i].querySelector(".manual-vn").value || "").trim();
+          if (!especie && !vnRaw) continue;
+          if (!especie) {
+            cb(new Error("Completá la especie (ticker o código CVSA) en todas las filas con VN."));
+            return;
+          }
+          var vn = parseInputMonto(vnRaw);
+          if (isNaN(vn) || vn <= 0) {
+            cb(new Error("Cantidad de VN inválida para \"" + especie + "\"."));
+            return;
+          }
+          /* Una sola columna de identidad: numérico = CVSA, texto = ticker. */
+          if (/^\d+$/.test(especie)) {
+            rows.push({ "Código CVSA": especie, "Ticker": "", "VN": String(vn) });
+          } else {
+            rows.push({ "Código CVSA": "", "Ticker": especie.toUpperCase(), "VN": String(vn) });
+          }
+        }
+        if (!rows.length) {
+          cb(new Error("Agregá al menos una especie con cantidad de VN."));
+          return;
+        }
+        cb(null, { headers: ["Ticker", "Código CVSA", "VN"], rows: rows });
+      }
+
+      function loadCarteraData(cb) {
+        if (getPortfolioMode() === "manual") {
+          readManualCartera(cb);
+          return;
+        }
         var fileCar = document.getElementById("file-cartera").files[0];
+        if (!fileCar) {
+          cb(new Error("Seleccioná el archivo de Mi cartera."));
+          return;
+        }
+        readFileAsData(fileCar, 0, cb);
+      }
+
+      function formatA3ConsultaDate(raw) {
+        if (!raw) return null;
+        var s = String(raw).trim();
+        var m = s.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+        if (!m) return null;
+        var dd = m[1].length === 1 ? "0" + m[1] : m[1];
+        var mm = m[2].length === 1 ? "0" + m[2] : m[2];
+        return dd + "/" + mm + "/" + m[3];
+      }
+
+      function updateA3ListMetaLabel(overrideDate, fromUpload) {
+        var el = document.getElementById("a3-list-meta");
+        if (!el) return;
+        if (fromUpload) {
+          el.textContent = overrideDate
+            ? ("Activos Aceptados en Garantía — Cauciones · última actualización " + overrideDate + " (archivo cargado)")
+            : "Activos Aceptados en Garantía — Cauciones · lista actualizada desde archivo cargado";
+          return;
+        }
+        el.textContent = "Activos Aceptados en Garantía — Cauciones · última actualización " + A3_DEFAULT_UPDATED;
+      }
+
+      function loadBundledA3List(cb) {
+        if (a3BundledCache) {
+          cb(null, a3BundledCache);
+          return;
+        }
+        /* Prefer embedded JS (works on GitHub Pages, Try Live, and file://). */
+        var embedded = a3DataFromBundledGlobal();
+        if (embedded) {
+          a3BundledCache = embedded;
+          cb(null, embedded);
+          return;
+        }
+        /* Fallback: fetch the committed xlsx if the script bundle is missing. */
+        fetch(A3_DEFAULT_LIST_URL).then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.arrayBuffer();
+        }).then(function (ab) {
+          var parsed = parseExcelFromArrayBuffer(ab, 2);
+          if (!parsed.headers.length || !parsed.rows.length) {
+            throw new Error("El Excel A3 incluido está vacío o mal formado.");
+          }
+          a3BundledCache = parsed;
+          cb(null, parsed);
+        }).catch(function (err) {
+          cb(new Error("No se pudo cargar la lista A3 incluida: " + (err && err.message ? err.message : String(err))));
+        });
+      }
+
+      function loadGarantiasForMercado(mercado, cb) {
+        if (mercado === "A3") {
+          var fileA3 = document.getElementById("file-garantias-a3").files[0];
+          if (fileA3) {
+            readFileAsData(fileA3, 2, function (err, data) {
+              if (err) {
+                cb(err);
+                return;
+              }
+              var consultaCol = findOptionalCol(data.headers, ["Fecha y Hora de Última Consulta", "Fecha de Última Consulta", "Ultima Consulta"]);
+              var updated = null;
+              if (consultaCol && data.rows.length) {
+                updated = formatA3ConsultaDate(data.rows[0][consultaCol]);
+              }
+              updateA3ListMetaLabel(updated, true);
+              cb(null, { data: data, format: "a3", sourceLabel: updated ? ("lista A3 · " + updated + " (archivo)") : "lista A3 (archivo cargado)" });
+            });
+            return;
+          }
+          loadBundledA3List(function (err, data) {
+            if (err) {
+              cb(err);
+              return;
+            }
+            updateA3ListMetaLabel(null, false);
+            cb(null, { data: data, format: "a3", sourceLabel: "lista A3 · última actualización " + A3_DEFAULT_UPDATED });
+          });
+          return;
+        }
+        var fileGar = document.getElementById("file-garantias").files[0];
+        if (!fileGar) {
+          cb(new Error("Seleccioná el archivo de Garantías aceptadas."));
+          return;
+        }
+        readFileAsData(fileGar, 0, function (err, data) {
+          if (err) {
+            cb(err);
+            return;
+          }
+          cb(null, { data: data, format: "byma", sourceLabel: "garantías BYMA (archivo)" });
+        });
+      }
+
+      function buildGarantiasLookup(garPack, moneda) {
+        var gar = garPack.data;
+        var garCols = gar.headers;
+        var isA3 = garPack.format === "a3";
+        var codGar = findCol(
+          garCols,
+          isA3
+            ? ["Código del Activo", "Codigo del Activo", "Código CVSA", "Codigo CVSA", "Código", "Codigo", "Cód.", "Cod."]
+            : ["Código CVSA", "Codigo CVSA", "Código", "Codigo", "Cód.", "Cod."],
+          0,
+          true,
+          "Garantías"
+        );
+        var aforoCol = findCol(garCols, ["Aforo", "Aforo %", "Porcentaje aforo", "Aforo % "], isA3 ? 5 : 3, false, "Garantías");
+        var especieCol = findCol(
+          garCols,
+          isA3
+            ? ["Activo", "Especie", "Denominación", "Denominacion", "Descripción"]
+            : ["Especie", "Denominación", "Denominacion", "Descripción", "Activo"],
+          1,
+          false,
+          "Garantías"
+        );
+        var listaCol = findOptionalCol(garCols, ["Lista", "Segmento", "Tipo de Instrumento"]);
+        var cupoCol = findOptionalCol(garCols, ["Máximo por especie", "Maximo por especie", "Cupo Máximo", "Cupo Maximo", "Cupo"]);
+        var finalidadCol = isA3 ? findOptionalCol(garCols, ["Finalidad"]) : null;
+        var wantedFinalidad = null;
+        if (isA3) {
+          wantedFinalidad = moneda === "USD" ? "Cauciones U$S" : "Cauciones $";
+        }
+
+        var rows = gar.rows;
+        if (wantedFinalidad && finalidadCol) {
+          rows = rows.filter(function (row) {
+            return String(row[finalidadCol] || "").trim() === wantedFinalidad;
+          });
+        }
+
+        var aforoDict = {};
+        var cupoDict = {};
+        var especieDict = {};
+        var listaDict = {};
+        var especieToCod = {};
+
+        for (var gi = 0; gi < rows.length; gi++) {
+          var row = rows[gi];
+          var gk = parseFloat(row[codGar]);
+          if (isNaN(gk)) continue;
+          var cod = parseInt(gk, 10);
+          if (aforoCol && aforoDict[cod] === undefined) {
+            var afRaw = parseFloat(String(row[aforoCol] != null ? row[aforoCol] : "").replace(",", "."));
+            if (!isNaN(afRaw)) {
+              /* A3 trae aforo en decimal (0.85); BYMA suele traer porcentaje (85). */
+              aforoDict[cod] = afRaw > 0 && afRaw <= 1 ? afRaw * 100 : afRaw;
+            }
+          }
+          if (cupoCol && cupoDict[cod] === undefined) {
+            var cupoRaw = parseFloat(String(row[cupoCol] != null ? row[cupoCol] : "").replace(",", "."));
+            if (!isNaN(cupoRaw)) cupoDict[cod] = cupoRaw;
+          }
+          if (especieCol && especieDict[cod] === undefined) {
+            especieDict[cod] = row[especieCol];
+          }
+          if (listaCol && listaDict[cod] === undefined) {
+            listaDict[cod] = row[listaCol];
+          }
+          var eName = String(row[especieCol || garCols[1] || ""] || "").trim().toUpperCase();
+          if (eName && especieToCod[eName] == null) especieToCod[eName] = cod;
+        }
+        for (var key in especieDict) {
+          if (Object.prototype.hasOwnProperty.call(especieDict, key) && aforoDict[key] === undefined) {
+            aforoDict[key] = 100;
+          }
+        }
+        return {
+          aforoDict: aforoDict,
+          cupoDict: cupoDict,
+          especieDict: especieDict,
+          listaDict: listaDict,
+          especieToCod: especieToCod
+        };
+      }
+
+      function runCalculation() {
         var resultadoEl = document.getElementById("resultado");
         var tableWrap = document.getElementById("result-table-wrap");
 
@@ -270,9 +639,10 @@
         var plazo = parseInt(String(Math.round(parseInputMonto(document.getElementById("plazo").value) || 0)), 10);
         var moneda = document.getElementById("moneda").value;
         var mercado = document.getElementById("mercado").value;
+        var portfolioMode = getPortfolioMode();
 
-        if (!filePre || !fileGar || !fileCar) {
-          resultadoEl.textContent = "Seleccioná los tres archivos (Precios, Garantías aceptadas, Mi cartera).";
+        if (mercado === "BYMA" && !document.getElementById("file-garantias").files[0]) {
+          resultadoEl.textContent = "Seleccioná el archivo de Garantías aceptadas.";
           resultadoEl.classList.add("error");
           resultadoEl.style.display = "block";
           tableWrap.style.display = "none";
@@ -285,95 +655,87 @@
           tableWrap.style.display = "none";
           return;
         }
+        if (!window.Data912Prices || typeof window.Data912Prices.loadPriorBusinessDayCloses !== "function") {
+          resultadoEl.textContent = "No se pudo cargar el módulo de precios Data912.";
+          resultadoEl.classList.add("error");
+          resultadoEl.style.display = "block";
+          tableWrap.style.display = "none";
+          return;
+        }
 
-        readFileAsData(filePre, 1, function (errPre, pre) {
-          if (errPre) {
-            resultadoEl.textContent = "Error Precios: " + errPre.message;
+        resultadoEl.textContent = "Cargando precios (cierre último día hábil, Data912)…";
+        resultadoEl.classList.remove("error", "has-result");
+        resultadoEl.classList.add("empty");
+        resultadoEl.style.display = "block";
+        tableWrap.style.display = "none";
+
+        loadGarantiasForMercado(mercado, function (errGar, garPack) {
+          if (errGar) {
+            resultadoEl.textContent = "Error Garantías: " + errGar.message;
             resultadoEl.classList.add("error");
-            resultadoEl.style.display = "block";
-            tableWrap.style.display = "none";
             return;
           }
-          readFileAsData(fileGar, 0, function (errGar, gar) {
-            if (errGar) {
-              resultadoEl.textContent = "Error Garantías: " + errGar.message;
+          loadCarteraData(function (errCar, car) {
+            if (errCar) {
+              resultadoEl.textContent = "Error Mi cartera: " + errCar.message;
               resultadoEl.classList.add("error");
-              resultadoEl.style.display = "block";
-              tableWrap.style.display = "none";
               return;
             }
-            readFileAsData(fileCar, 0, function (errCar, car) {
-              if (errCar) {
-                resultadoEl.textContent = "Error Mi cartera: " + errCar.message;
-                resultadoEl.classList.add("error");
-                resultadoEl.style.display = "block";
-                tableWrap.style.display = "none";
-                return;
-              }
+
+            window.Data912Prices.loadPriorBusinessDayCloses().then(function (pricePack) {
               try {
-                var preCols = pre.headers;
-                var codPre = findCol(preCols, ["Cód.", "Cód", "Cod", "Código", "Codigo", "Código CVSA", "Codigo CVSA"], 0, true, "Precios");
-                var precioCol = findCol(preCols, ["Precio", "Valor", "Precio del título", "Valor del título"], 4, true, "Precios");
-                var denomCol = findCol(preCols, ["Denominación", "Denominacion", "Especie", "Descripción", "Descripcion"], 1, true, "Precios");
-                var preciosDict = buildNumericKeyDict(pre.rows, codPre, precioCol);
-                var denomDict = buildNumericKeyDict(pre.rows, codPre, denomCol);
-                var denomToCod = {};
-                for (var i = 0; i < pre.rows.length; i++) {
-                  var c = parseFloat(pre.rows[i][codPre]);
-                  if (!isNaN(c)) {
-                    var d = String(pre.rows[i][denomCol] || "").trim().toUpperCase();
-                    if (d && !denomToCod[d]) denomToCod[d] = parseInt(c, 10);
-                  }
+                var priceMap = pricePack.prices || {};
+                if (!Object.keys(priceMap).length) {
+                  throw new Error("No se obtuvieron precios desde Data912. Reintentá en unos segundos.");
                 }
 
-                var garCols = gar.headers;
-                var codGar = findCol(garCols, ["Código CVSA", "Codigo CVSA", "Código", "Codigo", "Cód.", "Cod."], 0, true, "Garantías");
-                var aforoCol = findCol(garCols, ["Aforo", "Aforo %", "Porcentaje aforo", "Aforo % "], 3, false, "Garantías");
-                var especieCol = findCol(garCols, ["Especie", "Denominación", "Denominacion", "Descripción"], 1, false, "Garantías");
-                var listaCol = findCol(garCols, ["Lista", "Segmento", "Tipo de Instrumento"], 3, false, "Garantías");
-                var cupoCol = findCol(garCols, ["Máximo por especie", "Maximo por especie", "Cupo Máximo", "Cupo Maximo", "Cupo"], 2, false, "Garantías");
-                var aforoDict = {};
-                if (aforoCol) {
-                  aforoDict = buildNumericKeyDict(gar.rows, codGar, aforoCol);
-                }
-                var cupoDict = {};
-                if (cupoCol) {
-                  cupoDict = buildNumericKeyDict(gar.rows, codGar, cupoCol);
-                }
-                for (var gi = 0; gi < gar.rows.length; gi++) {
-                  var gk = parseFloat(gar.rows[gi][codGar]);
-                  if (!isNaN(gk) && aforoDict[parseInt(gk, 10)] === undefined) {
-                    aforoDict[parseInt(gk, 10)] = 100;
-                  }
-                }
-                var especieDict = buildNumericKeyDict(gar.rows, codGar, especieCol || garCols[1] || garCols[0]);
-                var listaDict = buildNumericKeyDict(gar.rows, codGar, listaCol || garCols[3] || garCols[0]);
+                var lookup = buildGarantiasLookup(garPack, moneda);
+                var aforoDict = lookup.aforoDict;
+                var cupoDict = lookup.cupoDict;
+                var especieDict = lookup.especieDict;
+                var listaDict = lookup.listaDict;
+                var especieToCod = lookup.especieToCod;
 
                 var carCols = car.headers;
-                var codCarCol = findCol(carCols, ["Código CVSA", "Codigo CVSA", "Código", "Cod", "Ticker", "Ticker "], 0, true, "Mi cartera");
-                var cantCol = findCol(carCols, ["Cantidad", "Valores Nominales", "VN", "Cantidad VN", "Valores nominales"], 1, true, "Mi cartera");
+                var tickerCol = findOptionalCol(carCols, ["Ticker", "Símbolo", "Simbolo", "Symbol"]);
+                var cvsaCol = findOptionalCol(carCols, ["Código CVSA", "Codigo CVSA", "Cod CVSA", "Cód CVSA", "Cod. CVSA", "Cód. CVSA"]);
+                var idCol = null;
+                if (!tickerCol && !cvsaCol) {
+                  idCol = findCol(carCols, ["Código CVSA", "Codigo CVSA", "Código", "Cod", "Ticker", "Ticker "], 0, true, "Mi cartera");
+                }
+                var cantCol = findCol(carCols, ["Cantidad", "Valores Nominales", "VN", "Cantidad VN", "Valores nominales"], tickerCol && cvsaCol ? 2 : 1, true, "Mi cartera");
 
                 var montoFinal = monto + monto * (tasa / 100) * (plazo / 365);
                 var simbolo = moneda === "USD" ? "USD" : "$";
                 var results = [];
                 var totalContrib = 0;
+                var skippedNoPrice = [];
 
                 for (var ri = 0; ri < car.rows.length; ri++) {
                   var r = car.rows[ri];
-                  var idVal = String(r[codCarCol] || "").trim();
-                  var vn = parseFloat(r[cantCol]);
-                  if (!idVal || isNaN(vn) || vn <= 0) continue;
-                  var cod = null;
-                  if (/^\d+$/.test(idVal)) {
-                    cod = parseInt(idVal, 10);
-                  } else {
-                    cod = denomToCod[idVal.toUpperCase()] || parseInt(idVal, 10);
-                    if (isNaN(cod)) cod = null;
+                  var vn = parseFloat(String(r[cantCol] || "").replace(/\./g, "").replace(",", "."));
+                  if (isNaN(vn) || vn <= 0) continue;
+                  var ident = resolveCarteraIdentity(r, tickerCol, cvsaCol, idCol, especieToCod);
+                  var ticker = ident.ticker;
+                  var cod = ident.cod;
+                  if (!ticker && cod == null) continue;
+
+                  var price = ticker ? window.Data912Prices.lookupPrice(priceMap, ticker) : null;
+                  if ((price == null || isNaN(price)) && cod != null) {
+                    var espName = String(especieDict[cod] || "").trim().toUpperCase();
+                    if (espName) price = window.Data912Prices.lookupPrice(priceMap, espName);
+                    if ((price == null || isNaN(price)) && !ticker) ticker = espName || null;
                   }
-                  if (cod === null) continue;
-                  var price = preciosDict[cod];
-                  if (price === undefined || price === null || price === "" || isNaN(parseFloat(price))) continue;
-                  price = parseFloat(price);
+                  if (price == null || isNaN(price)) {
+                    skippedNoPrice.push(ticker || ("CVSA " + cod));
+                    continue;
+                  }
+                  if (cod == null) cod = ticker;
+
+                  if (garPack.format === "a3" && (aforoDict[cod] === undefined || aforoDict[cod] === null || aforoDict[cod] === "")) {
+                    continue;
+                  }
+
                   var lista = String(listaDict[cod] || "");
                   var isFixedIncome = lista.indexOf("Acciones") !== 0 && lista.indexOf("CEDEARS") !== 0;
                   var multiplier = isFixedIncome ? price / 100 : price;
@@ -386,7 +748,9 @@
                   var cupoRaw = cupoDict[cod];
                   var cupoMax = (cupoRaw !== undefined && cupoRaw !== null && cupoRaw !== "") ? parseFloat(cupoRaw) : 0;
                   if (isNaN(cupoMax)) cupoMax = 0;
-                  var especie = especieDict[cod] !== undefined && especieDict[cod] !== null && String(especieDict[cod]).trim() !== "" ? especieDict[cod] : denomDict[cod] || cod;
+                  var especie = especieDict[cod] !== undefined && especieDict[cod] !== null && String(especieDict[cod]).trim() !== ""
+                    ? especieDict[cod]
+                    : (ticker || cod);
                   results.push({
                     cod: cod,
                     especie: especie,
@@ -419,28 +783,46 @@
 
                 var pctTotal = montoFinal > 0 ? (totalContrib / montoFinal) * 100 : 0;
                 var alcanza = totalContrib >= montoFinal;
+                var closeDateLabel = pricePack.closeDate
+                  ? ("Cierre " + pricePack.closeDate + " (último día hábil)")
+                  : "Cierre último día hábil (Data912 /live)";
 
                 resultadoEl.classList.remove("empty", "error");
                 resultadoEl.classList.add("has-result");
                 resultadoEl.style.display = "none";
                 tableWrap.style.display = "block";
 
-                var tableHtml = "<p class=\"result-summary\">Monto inicial: " + simbolo + " " + formatoNumero(monto, 0) + " | Tasa: " + formatoNumero(tasa, 2) + "% | Plazo: " + plazo + " días</p>";
+                var portfolioLabel = portfolioMode === "manual" ? "carga manual" : "carga masiva";
+                var tableHtml = "<p class=\"result-summary\">Mercado: " + escapeHtml(mercado) + " · " + escapeHtml(garPack.sourceLabel) + " · portfolio: " + portfolioLabel + "</p>";
+                tableHtml += "<p class=\"result-summary\">Precios: " + escapeHtml(closeDateLabel) + " · fuente Data912 (misma API que el ticker)</p>";
+                tableHtml += "<p class=\"result-summary\">Monto inicial: " + simbolo + " " + formatoNumero(monto, 0) + " | Tasa: " + formatoNumero(tasa, 2) + "% | Plazo: " + plazo + " días</p>";
                 tableHtml += "<p class=\"result-summary\"><strong>Monto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "</strong></p>";
                 tableHtml += "<p class=\"result-summary\">Total garantía calculada: " + simbolo + " " + formatoNumero(totalContrib, 2) + " | <strong>" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "</strong></p>";
+                if (skippedNoPrice.length) {
+                  tableHtml += "<p class=\"result-summary\">Sin precio Data912 (omitidas): " + escapeHtml(skippedNoPrice.slice(0, 12).join(", ")) + (skippedNoPrice.length > 12 ? "…" : "") + "</p>";
+                }
                 tableHtml += "<table class=\"result-table\"><thead><tr><th>Cód.</th><th>Especie</th><th>VN</th><th>Precio</th><th>Aforo %</th><th>Contribución " + moneda + "</th><th>% del monto final</th><th>VN usado</th><th>Monto usado " + moneda + "</th><th>VN libre</th></tr></thead><tbody>";
                 var copyLines = ["Cód.\tEspecie\tVN\tPrecio\tAforo %\tContribución " + moneda + "\t% del monto final\tVN usado\tMonto usado " + moneda + "\tVN libre"];
                 for (var i = 0; i < results.length; i++) {
-                  var row = results[i];
-                  tableHtml += "<tr><td>" + row.cod + "</td><td>" + escapeHtml(row.especie) + "</td><td>" + formatoNumero(row.vn, 2) + "</td><td>" + formatoNumero(row.precio, 4) + "</td><td>" + formatoNumero(row.aforoPct, 2) + "</td><td>" + formatoNumero(row.contribucion, 2) + "</td><td>" + formatoNumero(row.pctCobertura, 2) + "%</td><td>" + formatoNumero(row.vnUsado, 2) + "</td><td>" + formatoNumero(row.montoUsado, 2) + "</td><td>" + formatoNumero(row.vnLibre, 2) + "</td></tr>";
-                  copyLines.push([row.cod, row.especie, formatoNumero(row.vn, 2), formatoNumero(row.precio, 4), formatoNumero(row.aforoPct, 2), formatoNumero(row.contribucion, 2), formatoNumero(row.pctCobertura, 2) + "%", formatoNumero(row.vnUsado, 2), formatoNumero(row.montoUsado, 2), formatoNumero(row.vnLibre, 2)].join("\t"));
+                  var rowOut = results[i];
+                  tableHtml += "<tr><td>" + rowOut.cod + "</td><td>" + escapeHtml(rowOut.especie) + "</td><td>" + formatoNumero(rowOut.vn, 2) + "</td><td>" + formatoNumero(rowOut.precio, 4) + "</td><td>" + formatoNumero(rowOut.aforoPct, 2) + "</td><td>" + formatoNumero(rowOut.contribucion, 2) + "</td><td>" + formatoNumero(rowOut.pctCobertura, 2) + "%</td><td>" + formatoNumero(rowOut.vnUsado, 2) + "</td><td>" + formatoNumero(rowOut.montoUsado, 2) + "</td><td>" + formatoNumero(rowOut.vnLibre, 2) + "</td></tr>";
+                  copyLines.push([rowOut.cod, rowOut.especie, formatoNumero(rowOut.vn, 2), formatoNumero(rowOut.precio, 4), formatoNumero(rowOut.aforoPct, 2), formatoNumero(rowOut.contribucion, 2), formatoNumero(rowOut.pctCobertura, 2) + "%", formatoNumero(rowOut.vnUsado, 2), formatoNumero(rowOut.montoUsado, 2), formatoNumero(rowOut.vnLibre, 2)].join("\t"));
                 }
                 tableHtml += "</tbody></table>";
                 tableWrap.innerHTML = tableHtml;
 
-                window._lastResultText = "Monto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "\nTotal garantía: " + simbolo + " " + formatoNumero(totalContrib, 2) + "\n" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "\n\n" + copyLines.join("\n");
+                window._lastResultText = closeDateLabel + "\nMonto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "\nTotal garantía: " + simbolo + " " + formatoNumero(totalContrib, 2) + "\n" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "\n\n" + copyLines.join("\n");
                 window._lastResultsForExcel = results;
-                window._lastGarantiasMeta = { montoFinal: montoFinal, totalContrib: totalContrib, alcanza: alcanza, pctTotal: pctTotal, moneda: moneda, mercado: mercado };
+                window._lastGarantiasMeta = {
+                  montoFinal: montoFinal,
+                  totalContrib: totalContrib,
+                  alcanza: alcanza,
+                  pctTotal: pctTotal,
+                  moneda: moneda,
+                  mercado: mercado,
+                  closeDate: pricePack.closeDate,
+                  garantiasSource: garPack.sourceLabel
+                };
               } catch (err) {
                 resultadoEl.textContent = "Error: " + err.message;
                 resultadoEl.classList.add("error");
@@ -449,6 +831,11 @@
                 window._lastResultText = null;
                 window._lastResultsForExcel = null;
               }
+            }).catch(function (err) {
+              resultadoEl.textContent = "Error al cargar precios Data912: " + (err && err.message ? err.message : String(err));
+              resultadoEl.classList.add("error");
+              resultadoEl.style.display = "block";
+              tableWrap.style.display = "none";
             });
           });
         });
@@ -459,6 +846,33 @@
         div.textContent = s;
         return div.innerHTML;
       }
+
+      document.getElementById("mercado").addEventListener("change", syncMercadoUi);
+      document.getElementById("file-garantias-a3").addEventListener("change", function () {
+        var f = this.files && this.files[0];
+        if (!f) {
+          updateA3ListMetaLabel(null, false);
+          return;
+        }
+        readFileAsData(f, 2, function (err, data) {
+          if (err || !data) {
+            updateA3ListMetaLabel(null, true);
+            return;
+          }
+          var consultaCol = findOptionalCol(data.headers, ["Fecha y Hora de Última Consulta", "Fecha de Última Consulta", "Ultima Consulta"]);
+          var updated = null;
+          if (consultaCol && data.rows.length) updated = formatA3ConsultaDate(data.rows[0][consultaCol]);
+          updateA3ListMetaLabel(updated, true);
+        });
+      });
+      [].forEach.call(document.querySelectorAll('input[name="portfolioMode"]'), function (radio) {
+        radio.addEventListener("change", syncPortfolioModeUi);
+      });
+      document.getElementById("btn-add-manual-row").addEventListener("click", function () {
+        addManualPortfolioRow();
+      });
+      syncMercadoUi();
+      syncPortfolioModeUi();
 
       document.getElementById("btn-calcular").addEventListener("click", runCalculation);
       document.getElementById("form-garantias").addEventListener("submit", function (e) {
