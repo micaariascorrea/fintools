@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de operaciones | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .result-block.warning { background: rgba(210, 153, 34, 0.12); border-left: 4px solid #d29922; }
+  </style>
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+      <h1>Financial Tools</h1>
+      <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Control de operaciones</h2>
+        <p class="tool-desc">Cargá el CSV de operaciones (Client ID, Symbol, Side, Executed Size, Turnover). Arma la tabla dinámica por cliente y símbolo, y marca alertas cuando el total alcanza el umbral en ARS.</p>
+
+        <form id="form-control-ops" novalidate action="javascript:void(0);">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="file-ops">CSV de operaciones</label>
+              <input type="file" id="file-ops" name="ops" accept=".csv,text/csv" required>
+            </div>
+            <div class="form-group">
+              <label for="umbral-alerta">Umbral de alerta (ARS)</label>
+              <input type="text" id="umbral-alerta" name="umbral" inputmode="numeric" autocomplete="off" value="200.000.000" required>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-procesar">Procesar</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="result-wrap">
+          <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
+          <div id="result-table-wrap" class="result-table-wrap" style="display: none;"></div>
+          <div class="result-actions">
+            <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button type="button" id="btn-exportar-excel" class="btn btn-icon btn-excel" title="Exportar a Excel" aria-label="Exportar a Excel"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+
+  <script src="assets/xlsx.full.min.js"></script>
+  <script src="assets/js/control-operaciones.js"></script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>
