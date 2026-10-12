@@ -23,7 +23,7 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Calculadora de garantías</h2>
-        <p class="tool-desc">Simula si tu cartera alcanza para garantizar una caución. Los precios se toman del cierre del último día hábil (misma API Data912 que el ticker). Cargá Garantías aceptadas y tu cartera (ticker / cód. CVSA / VN).</p>
+        <p class="tool-desc">Simula si tu cartera alcanza para garantizar una caución. Los precios se toman del cierre del último día hábil (misma API Data912 que el ticker). Elegí el mercado, cargá tu cartera (ticker / cód. CVSA / VN) y, si aplica, la lista de garantías.</p>
 
         <div class="form-group">
           <a href="assets/plantilla_gara.xlsx" class="btn btn-secondary" download="plantilla_gara.xlsx">Descargar plantilla</a>
@@ -33,20 +33,25 @@
         <form id="form-garantias" novalidate action="javascript:void(0);">
           <div class="form-grid">
             <div class="form-group">
+              <label for="mercado">Mercado</label>
+              <select id="mercado" name="mercado">
+                <option value="BYMA" selected>BYMA</option>
+                <option value="A3">A3</option>
+              </select>
+            </div>
+            <div class="form-group" id="group-garantias-byma">
               <label for="file-garantias">Garantías aceptadas</label>
-              <input type="file" id="file-garantias" name="garantias" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+              <input type="file" id="file-garantias" name="garantias" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+            </div>
+            <div class="form-group" id="group-garantias-a3" style="display: none;">
+              <label for="file-garantias-a3">Garantías aceptadas (A3)</label>
+              <p id="a3-list-meta" class="form-hint">Activos Aceptados en Garantía — Cauciones · última actualización 12/10/2026</p>
+              <input type="file" id="file-garantias-a3" name="garantias-a3" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              <span class="form-hint">Para actualizarla, subí un archivo más nuevo en el mismo formato. Si no subís nada, se usa la lista incluida.</span>
             </div>
             <div class="form-group">
               <label for="file-cartera">Mi cartera (archivo completado)</label>
               <input type="file" id="file-cartera" name="cartera" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-            </div>
-            <div class="form-group">
-              <label for="mercado">Mercado</label>
-              <select id="mercado" name="mercado">
-                <option value="BYMA">BYMA</option>
-                <option value="MAV">MAV</option>
-                <option value="A3">A3</option>
-              </select>
             </div>
             <div class="form-group">
               <label for="moneda">Moneda</label>
@@ -255,6 +260,10 @@
         }
       }
 
+      var A3_DEFAULT_LIST_URL = "assets/activos-aceptados-a3-cauciones.xlsx";
+      var A3_DEFAULT_UPDATED = "12/10/2026";
+      var a3BundledCache = null;
+
       function findOptionalCol(cols, candidates) {
         try {
           return findCol(cols, candidates, null, false, "");
@@ -280,8 +289,185 @@
         return { ticker: ticker || null, cod: cod };
       }
 
-      function runCalculation() {
+      function syncMercadoUi() {
+        var mercado = document.getElementById("mercado").value;
+        var isA3 = mercado === "A3";
+        document.getElementById("group-garantias-byma").style.display = isA3 ? "none" : "";
+        document.getElementById("group-garantias-a3").style.display = isA3 ? "" : "none";
+        var fileByma = document.getElementById("file-garantias");
+        if (fileByma) {
+          if (isA3) fileByma.removeAttribute("required");
+          else fileByma.setAttribute("required", "required");
+        }
+        if (isA3) updateA3ListMetaLabel();
+      }
+
+      function formatA3ConsultaDate(raw) {
+        if (!raw) return null;
+        var s = String(raw).trim();
+        var m = s.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+        if (!m) return null;
+        var dd = m[1].length === 1 ? "0" + m[1] : m[1];
+        var mm = m[2].length === 1 ? "0" + m[2] : m[2];
+        return dd + "/" + mm + "/" + m[3];
+      }
+
+      function updateA3ListMetaLabel(overrideDate, fromUpload) {
+        var el = document.getElementById("a3-list-meta");
+        if (!el) return;
+        if (fromUpload) {
+          el.textContent = overrideDate
+            ? ("Activos Aceptados en Garantía — Cauciones · última actualización " + overrideDate + " (archivo cargado)")
+            : "Activos Aceptados en Garantía — Cauciones · lista actualizada desde archivo cargado";
+          return;
+        }
+        el.textContent = "Activos Aceptados en Garantía — Cauciones · última actualización " + A3_DEFAULT_UPDATED;
+      }
+
+      function loadBundledA3List(cb) {
+        if (a3BundledCache) {
+          cb(null, a3BundledCache);
+          return;
+        }
+        fetch(A3_DEFAULT_LIST_URL).then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.arrayBuffer();
+        }).then(function (ab) {
+          var parsed = parseExcelFromArrayBuffer(ab, 2);
+          a3BundledCache = parsed;
+          cb(null, parsed);
+        }).catch(function (err) {
+          cb(new Error("No se pudo cargar la lista A3 incluida: " + (err && err.message ? err.message : String(err))));
+        });
+      }
+
+      function loadGarantiasForMercado(mercado, cb) {
+        if (mercado === "A3") {
+          var fileA3 = document.getElementById("file-garantias-a3").files[0];
+          if (fileA3) {
+            readFileAsData(fileA3, 2, function (err, data) {
+              if (err) {
+                cb(err);
+                return;
+              }
+              var consultaCol = findOptionalCol(data.headers, ["Fecha y Hora de Última Consulta", "Fecha de Última Consulta", "Ultima Consulta"]);
+              var updated = null;
+              if (consultaCol && data.rows.length) {
+                updated = formatA3ConsultaDate(data.rows[0][consultaCol]);
+              }
+              updateA3ListMetaLabel(updated, true);
+              cb(null, { data: data, format: "a3", sourceLabel: updated ? ("lista A3 · " + updated + " (archivo)") : "lista A3 (archivo cargado)" });
+            });
+            return;
+          }
+          loadBundledA3List(function (err, data) {
+            if (err) {
+              cb(err);
+              return;
+            }
+            updateA3ListMetaLabel(null, false);
+            cb(null, { data: data, format: "a3", sourceLabel: "lista A3 · última actualización " + A3_DEFAULT_UPDATED });
+          });
+          return;
+        }
         var fileGar = document.getElementById("file-garantias").files[0];
+        if (!fileGar) {
+          cb(new Error("Seleccioná el archivo de Garantías aceptadas."));
+          return;
+        }
+        readFileAsData(fileGar, 0, function (err, data) {
+          if (err) {
+            cb(err);
+            return;
+          }
+          cb(null, { data: data, format: "byma", sourceLabel: "garantías BYMA (archivo)" });
+        });
+      }
+
+      function buildGarantiasLookup(garPack, moneda) {
+        var gar = garPack.data;
+        var garCols = gar.headers;
+        var isA3 = garPack.format === "a3";
+        var codGar = findCol(
+          garCols,
+          isA3
+            ? ["Código del Activo", "Codigo del Activo", "Código CVSA", "Codigo CVSA", "Código", "Codigo", "Cód.", "Cod."]
+            : ["Código CVSA", "Codigo CVSA", "Código", "Codigo", "Cód.", "Cod."],
+          0,
+          true,
+          "Garantías"
+        );
+        var aforoCol = findCol(garCols, ["Aforo", "Aforo %", "Porcentaje aforo", "Aforo % "], isA3 ? 5 : 3, false, "Garantías");
+        var especieCol = findCol(
+          garCols,
+          isA3
+            ? ["Activo", "Especie", "Denominación", "Denominacion", "Descripción"]
+            : ["Especie", "Denominación", "Denominacion", "Descripción", "Activo"],
+          1,
+          false,
+          "Garantías"
+        );
+        var listaCol = findOptionalCol(garCols, ["Lista", "Segmento", "Tipo de Instrumento"]);
+        var cupoCol = findOptionalCol(garCols, ["Máximo por especie", "Maximo por especie", "Cupo Máximo", "Cupo Maximo", "Cupo"]);
+        var finalidadCol = isA3 ? findOptionalCol(garCols, ["Finalidad"]) : null;
+        var wantedFinalidad = null;
+        if (isA3) {
+          wantedFinalidad = moneda === "USD" ? "Cauciones U$S" : "Cauciones $";
+        }
+
+        var rows = gar.rows;
+        if (wantedFinalidad && finalidadCol) {
+          rows = rows.filter(function (row) {
+            return String(row[finalidadCol] || "").trim() === wantedFinalidad;
+          });
+        }
+
+        var aforoDict = {};
+        var cupoDict = {};
+        var especieDict = {};
+        var listaDict = {};
+        var especieToCod = {};
+
+        for (var gi = 0; gi < rows.length; gi++) {
+          var row = rows[gi];
+          var gk = parseFloat(row[codGar]);
+          if (isNaN(gk)) continue;
+          var cod = parseInt(gk, 10);
+          if (aforoCol && aforoDict[cod] === undefined) {
+            var afRaw = parseFloat(String(row[aforoCol] != null ? row[aforoCol] : "").replace(",", "."));
+            if (!isNaN(afRaw)) {
+              /* A3 trae aforo en decimal (0.85); BYMA suele traer porcentaje (85). */
+              aforoDict[cod] = afRaw > 0 && afRaw <= 1 ? afRaw * 100 : afRaw;
+            }
+          }
+          if (cupoCol && cupoDict[cod] === undefined) {
+            var cupoRaw = parseFloat(String(row[cupoCol] != null ? row[cupoCol] : "").replace(",", "."));
+            if (!isNaN(cupoRaw)) cupoDict[cod] = cupoRaw;
+          }
+          if (especieCol && especieDict[cod] === undefined) {
+            especieDict[cod] = row[especieCol];
+          }
+          if (listaCol && listaDict[cod] === undefined) {
+            listaDict[cod] = row[listaCol];
+          }
+          var eName = String(row[especieCol || garCols[1] || ""] || "").trim().toUpperCase();
+          if (eName && especieToCod[eName] == null) especieToCod[eName] = cod;
+        }
+        for (var key in especieDict) {
+          if (Object.prototype.hasOwnProperty.call(especieDict, key) && aforoDict[key] === undefined) {
+            aforoDict[key] = 100;
+          }
+        }
+        return {
+          aforoDict: aforoDict,
+          cupoDict: cupoDict,
+          especieDict: especieDict,
+          listaDict: listaDict,
+          especieToCod: especieToCod
+        };
+      }
+
+      function runCalculation() {
         var fileCar = document.getElementById("file-cartera").files[0];
         var resultadoEl = document.getElementById("resultado");
         var tableWrap = document.getElementById("result-table-wrap");
@@ -292,8 +478,15 @@
         var moneda = document.getElementById("moneda").value;
         var mercado = document.getElementById("mercado").value;
 
-        if (!fileGar || !fileCar) {
-          resultadoEl.textContent = "Seleccioná Garantías aceptadas y Mi cartera.";
+        if (!fileCar) {
+          resultadoEl.textContent = "Seleccioná el archivo de Mi cartera.";
+          resultadoEl.classList.add("error");
+          resultadoEl.style.display = "block";
+          tableWrap.style.display = "none";
+          return;
+        }
+        if (mercado === "BYMA" && !document.getElementById("file-garantias").files[0]) {
+          resultadoEl.textContent = "Seleccioná el archivo de Garantías aceptadas.";
           resultadoEl.classList.add("error");
           resultadoEl.style.display = "block";
           tableWrap.style.display = "none";
@@ -320,7 +513,7 @@
         resultadoEl.style.display = "block";
         tableWrap.style.display = "none";
 
-        readFileAsData(fileGar, 0, function (errGar, gar) {
+        loadGarantiasForMercado(mercado, function (errGar, garPack) {
           if (errGar) {
             resultadoEl.textContent = "Error Garantías: " + errGar.message;
             resultadoEl.classList.add("error");
@@ -340,35 +533,12 @@
                   throw new Error("No se obtuvieron precios desde Data912. Reintentá en unos segundos.");
                 }
 
-                var garCols = gar.headers;
-                var codGar = findCol(garCols, ["Código CVSA", "Codigo CVSA", "Código", "Codigo", "Cód.", "Cod."], 0, true, "Garantías");
-                var aforoCol = findCol(garCols, ["Aforo", "Aforo %", "Porcentaje aforo", "Aforo % "], 3, false, "Garantías");
-                var especieCol = findCol(garCols, ["Especie", "Denominación", "Denominacion", "Descripción"], 1, false, "Garantías");
-                var listaCol = findCol(garCols, ["Lista", "Segmento", "Tipo de Instrumento"], 3, false, "Garantías");
-                var cupoCol = findCol(garCols, ["Máximo por especie", "Maximo por especie", "Cupo Máximo", "Cupo Maximo", "Cupo"], 2, false, "Garantías");
-                var aforoDict = {};
-                if (aforoCol) {
-                  aforoDict = buildNumericKeyDict(gar.rows, codGar, aforoCol);
-                }
-                var cupoDict = {};
-                if (cupoCol) {
-                  cupoDict = buildNumericKeyDict(gar.rows, codGar, cupoCol);
-                }
-                for (var gi = 0; gi < gar.rows.length; gi++) {
-                  var gk = parseFloat(gar.rows[gi][codGar]);
-                  if (!isNaN(gk) && aforoDict[parseInt(gk, 10)] === undefined) {
-                    aforoDict[parseInt(gk, 10)] = 100;
-                  }
-                }
-                var especieDict = buildNumericKeyDict(gar.rows, codGar, especieCol || garCols[1] || garCols[0]);
-                var listaDict = buildNumericKeyDict(gar.rows, codGar, listaCol || garCols[3] || garCols[0]);
-                var especieToCod = {};
-                for (var ei = 0; ei < gar.rows.length; ei++) {
-                  var eCod = parseFloat(gar.rows[ei][codGar]);
-                  if (isNaN(eCod)) continue;
-                  var eName = String(gar.rows[ei][especieCol || garCols[1] || ""] || "").trim().toUpperCase();
-                  if (eName && especieToCod[eName] == null) especieToCod[eName] = parseInt(eCod, 10);
-                }
+                var lookup = buildGarantiasLookup(garPack, moneda);
+                var aforoDict = lookup.aforoDict;
+                var cupoDict = lookup.cupoDict;
+                var especieDict = lookup.especieDict;
+                var listaDict = lookup.listaDict;
+                var especieToCod = lookup.especieToCod;
 
                 var carCols = car.headers;
                 var tickerCol = findOptionalCol(carCols, ["Ticker", "Símbolo", "Simbolo", "Symbol"]);
@@ -405,6 +575,10 @@
                     continue;
                   }
                   if (cod == null) cod = ticker;
+
+                  if (garPack.format === "a3" && (aforoDict[cod] === undefined || aforoDict[cod] === null || aforoDict[cod] === "")) {
+                    continue;
+                  }
 
                   var lista = String(listaDict[cod] || "");
                   var isFixedIncome = lista.indexOf("Acciones") !== 0 && lista.indexOf("CEDEARS") !== 0;
@@ -462,7 +636,8 @@
                 resultadoEl.style.display = "none";
                 tableWrap.style.display = "block";
 
-                var tableHtml = "<p class=\"result-summary\">Precios: " + escapeHtml(closeDateLabel) + " · fuente Data912 (misma API que el ticker)</p>";
+                var tableHtml = "<p class=\"result-summary\">Mercado: " + escapeHtml(mercado) + " · " + escapeHtml(garPack.sourceLabel) + "</p>";
+                tableHtml += "<p class=\"result-summary\">Precios: " + escapeHtml(closeDateLabel) + " · fuente Data912 (misma API que el ticker)</p>";
                 tableHtml += "<p class=\"result-summary\">Monto inicial: " + simbolo + " " + formatoNumero(monto, 0) + " | Tasa: " + formatoNumero(tasa, 2) + "% | Plazo: " + plazo + " días</p>";
                 tableHtml += "<p class=\"result-summary\"><strong>Monto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "</strong></p>";
                 tableHtml += "<p class=\"result-summary\">Total garantía calculada: " + simbolo + " " + formatoNumero(totalContrib, 2) + " | <strong>" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "</strong></p>";
@@ -488,7 +663,8 @@
                   pctTotal: pctTotal,
                   moneda: moneda,
                   mercado: mercado,
-                  closeDate: pricePack.closeDate
+                  closeDate: pricePack.closeDate,
+                  garantiasSource: garPack.sourceLabel
                 };
               } catch (err) {
                 resultadoEl.textContent = "Error: " + err.message;
@@ -513,6 +689,26 @@
         div.textContent = s;
         return div.innerHTML;
       }
+
+      document.getElementById("mercado").addEventListener("change", syncMercadoUi);
+      document.getElementById("file-garantias-a3").addEventListener("change", function () {
+        var f = this.files && this.files[0];
+        if (!f) {
+          updateA3ListMetaLabel(null, false);
+          return;
+        }
+        readFileAsData(f, 2, function (err, data) {
+          if (err || !data) {
+            updateA3ListMetaLabel(null, true);
+            return;
+          }
+          var consultaCol = findOptionalCol(data.headers, ["Fecha y Hora de Última Consulta", "Fecha de Última Consulta", "Ultima Consulta"]);
+          var updated = null;
+          if (consultaCol && data.rows.length) updated = formatA3ConsultaDate(data.rows[0][consultaCol]);
+          updateA3ListMetaLabel(updated, true);
+        });
+      });
+      syncMercadoUi();
 
       document.getElementById("btn-calcular").addEventListener("click", runCalculation);
       document.getElementById("form-garantias").addEventListener("submit", function (e) {
