@@ -26,17 +26,17 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Control de operaciones</h2>
-        <p class="tool-desc">Cargá el CSV de operaciones (Client ID, Symbol, Side, Executed Size, Turnover). Arma la tabla dinámica por cliente y símbolo, y marca alertas cuando el total alcanza el umbral en ARS.</p>
+        <p class="tool-desc">Descargá el archivo de control desde Millenium para revisar y controlar todas las operaciones. Cargalo acá (CSV con Client ID, Symbol, Side, Executed Size, Turnover): se arma la tabla dinámica por cliente y símbolo, y se marcan alertas cuando el total alcanza el umbral en ARS que indiques.</p>
 
         <form id="form-control-ops" novalidate action="javascript:void(0);">
           <div class="form-grid">
             <div class="form-group">
-              <label for="file-ops">CSV de operaciones</label>
+              <label for="file-ops">Archivo de control (Millenium)</label>
               <input type="file" id="file-ops" name="ops" accept=".csv,text/csv" required>
             </div>
             <div class="form-group">
               <label for="umbral-alerta">Umbral de alerta (ARS)</label>
-              <input type="text" id="umbral-alerta" name="umbral" inputmode="numeric" autocomplete="off" value="200.000.000" required>
+              <input type="text" id="umbral-alerta" name="umbral" inputmode="numeric" autocomplete="off" placeholder="Ej: 200.000.000" required>
             </div>
             <div class="form-actions">
               <button type="button" id="btn-procesar">Procesar</button>
