@@ -1,11 +1,8 @@
 (function () {
   "use strict";
 
-  var URL_FCI_HOME = "https://www.cnv.gov.ar/SitioWeb/FondosComunesInversion";
   var URL_FCI_DET = "https://www.cnv.gov.ar/SitioWeb/FondosComunesInversion/DetallesFCI/";
   var URL_FICHA = "https://www.cnv.gov.ar/SitioWeb/Empresas/Empresa/";
-  var URL_HECHOS = "https://www.cnv.gov.ar/SitioWeb/HechosRelevantes";
-  var URL_REGPUB = "https://www.cnv.gov.ar/SitioWeb/RegistrosPublicos/DetallesRegistrosPublicos/";
 
   var PALABRAS_GENERICAS = {
     FCI: 1, F: 1, C: 1, I: 1, FONDO: 1, COMUN: 1, DE: 1, DEL: 1, LA: 1, EL: 1, Y: 1,
@@ -15,11 +12,10 @@
   var MAX_POR_CATEGORIA = 1;
   var ANIO_MIN_ESTATUTO = 2005;
   var TRAMO_ESTATUTO = 5;
-  var STORAGE_KEY = "allinarg_cnv_fci_fondos_v1";
+  // v3: planilla-first discovery (Gerente/Depositaria from local planilla, not CNV list scrape).
+  var STORAGE_KEY = "allinarg_cnv_fci_fondos_v3";
   var STORAGE_EST = "allinarg_cnv_fci_estatutos_v1";
-  var STORAGE_LISTAS = "allinarg_cnv_fci_listas_v1";
-  var LISTAS_JSON = "assets/data/cnv-fci-listas.json";
-  var LISTAS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  var PLANILLA_JSON = "assets/data/planilla-fci.json";
   var FETCH_TIMEOUT_MS = 25000;
 
   var ACCENT = "1F6FEB";
@@ -44,8 +40,9 @@
   ];
 
   var state = {
-    listas: null,
+    planilla: null,
     pendingMatches: null,
+    pendingFondo: null,
     lastWorkbook: null,
     lastFilename: null,
     logoBuffer: null,
@@ -255,83 +252,6 @@
     return new DOMParser().parseFromString(html, "text/html");
   }
 
-  function leerDesplegables(html) {
-    var doc = parseDoc(html);
-    var selects = Array.prototype.slice.call(doc.querySelectorAll("select"));
-    var listas = [];
-    selects.forEach(function (sel) {
-      var ident = norm((sel.id || "") + " " + (sel.getAttribute("name") || ""));
-      var opts = [];
-      Array.prototype.forEach.call(sel.options, function (o) {
-        var v = String(o.value || "").trim();
-        var t = String(o.textContent || "").trim();
-        if (v && t && !norm(t).startsWith("SELECCION")) opts.push([v, t]);
-      });
-      if (opts.length) listas.push([ident, opts]);
-    });
-    var res = { fondos: [], gerentes: [], depositarias: [] };
-    listas.forEach(function (pair) {
-      var ident = pair[0];
-      var opts = pair[1];
-      var textos = opts.map(function (o) { return norm(o[1]); }).join(" | ");
-      if (ident.indexOf("DEPOSITARI") !== -1 || textos.indexOf("CAJA DE VALORES") !== -1) {
-        if (!res.depositarias.length) res.depositarias = opts;
-      } else if (ident.indexOf("GERENTE") !== -1 || (textos.indexOf("SOCIEDAD GERENTE") !== -1 && opts.length < 300)) {
-        if (!res.gerentes.length) res.gerentes = opts;
-      } else if (ident.indexOf("FONDO") !== -1 || ident.indexOf("FCI") !== -1 || ident === "LFC" || opts.length > 300) {
-        if (opts.length > res.fondos.length) res.fondos = opts;
-      }
-    });
-    return res;
-  }
-
-  function fillDepositariaSelect(opts) {
-    var sel = $("depositaria-select");
-    var current = sel.value;
-    sel.innerHTML = '<option value="">— Elegir de la lista CNV —</option>';
-    opts.forEach(function (o) {
-      var opt = document.createElement("option");
-      opt.value = o[0];
-      opt.textContent = o[1];
-      sel.appendChild(opt);
-    });
-    if (current) sel.value = current;
-  }
-
-  function entidadEnTexto(texto, opciones, etiqueta) {
-    var t = norm(texto);
-    var hallados = opciones.filter(function (o) {
-      return norm(o[1]).length > 5 && t.indexOf(norm(o[1])) !== -1;
-    });
-    if (hallados.length) {
-      return hallados.reduce(function (best, cur) {
-        return norm(cur[1]).length > norm(best[1]).length ? cur : best;
-      });
-    }
-    var re = new RegExp(etiqueta, "g");
-    var m;
-    var tramos = [];
-    while ((m = re.exec(t)) !== null) tramos.push(t.slice(m.index + m[0].length, m.index + m[0].length + 120));
-    var mejor = [null, ""];
-    var mejorP = 0;
-    tramos.forEach(function (tramo) {
-      opciones.forEach(function (o) {
-        var p = puntaje(o[1], tramo.slice(0, norm(o[1]).length + 10));
-        if (p > mejorP) {
-          mejorP = p;
-          mejor = o;
-        }
-      });
-    });
-    return mejorP >= 0.75 ? mejor : [null, ""];
-  }
-
-  function linksAif(doc) {
-    return Array.prototype.slice.call(doc.querySelectorAll("a[href]"))
-      .map(function (a) { return a.getAttribute("href"); })
-      .filter(function (h) { return h && h.toLowerCase().indexOf("publicview") !== -1; });
-  }
-
   function pushDoc(docs, vistos, fecha, descripcion, documento, link, seccion) {
     if (!link || link.toLowerCase().indexOf("publicview") === -1) return;
     var clave = documento || link.toLowerCase();
@@ -513,53 +433,6 @@
     return [null, null];
   }
 
-  async function cuitDesdeValor(valor, nombre) {
-    if (!valor) return null;
-    var digits = soloDigitos(valor);
-    if (digits.length === 11) return digits;
-    if (!/^\d+$/.test(valor)) return null;
-    try {
-      var html = await fetchText(URL_REGPUB + valor);
-      var doc = parseDoc(html);
-      var txt = (doc.body && doc.body.textContent) || "";
-      var clave = norm(nombre).slice(0, 15);
-      var re = /(\d{2}-?\d{8}-?\d)\s*-\s*([^|\n]{5,80})/g;
-      var m;
-      while ((m = re.exec(txt)) !== null) {
-        if (norm(m[2]).indexOf(clave) === 0) return soloDigitos(m[1]);
-      }
-      var pair = await cuitPorDocumentos(nombre, linksAif(doc));
-      return pair[1];
-    } catch (e) {
-      return null;
-    }
-  }
-
-  async function cuitDesdeHechos(nombre) {
-    try {
-      var html = await fetchText(URL_HECHOS);
-      var doc = parseDoc(html);
-      var candidatos = [];
-      Array.prototype.forEach.call(doc.querySelectorAll("tr"), function (tr) {
-        var a = tr.querySelector("a[href*='ublicview'], a[href*='ublicView'], a[href*='publicview']");
-        if (!a) return;
-        var ok = Array.prototype.some.call(tr.querySelectorAll("td"), function (td) {
-          return puntaje(nombre, (td.textContent || "").trim()) >= 0.85;
-        });
-        if (ok) candidatos.push(a.getAttribute("href"));
-      });
-      var uniq = [];
-      var seen = {};
-      candidatos.forEach(function (h) {
-        if (!seen[h]) { seen[h] = 1; uniq.push(h); }
-      });
-      var pair = await cuitPorDocumentos(nombre, uniq);
-      return pair[1];
-    } catch (e) {
-      return null;
-    }
-  }
-
   function loadFondosCache() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") || {}; }
     catch (e) { return {}; }
@@ -604,243 +477,158 @@
     return { needsPick: true, ranking: ranking };
   }
 
-  function loadListasCache() {
-    try {
-      var raw = JSON.parse(localStorage.getItem(STORAGE_LISTAS) || "null");
-      if (!raw || !raw.fondos || !raw.fondos.length) return null;
-      if (raw.savedAt && Date.now() - raw.savedAt > LISTAS_TTL_MS) return null;
-      // Prefer bundled file when cache lacks CUIT maps (older cache versions).
-      if (!raw.cuitById || !Object.keys(raw.cuitById).length) return null;
-      return raw;
-    } catch (e) {
-      return null;
-    }
+  function fillDatalist(id, names) {
+    var dl = $(id);
+    if (!dl) return;
+    dl.innerHTML = "";
+    (names || []).forEach(function (n) {
+      var opt = document.createElement("option");
+      opt.value = n;
+      dl.appendChild(opt);
+    });
   }
 
-  function saveListasCache(listas) {
-    try {
-      localStorage.setItem(STORAGE_LISTAS, JSON.stringify({
-        savedAt: Date.now(),
-        fondos: listas.fondos,
-        gerentes: listas.gerentes,
-        depositarias: listas.depositarias,
-        cuitById: listas.cuitById || {},
-        cuitGerenteById: listas.cuitGerenteById || {}
-      }));
-    } catch (e) { /* quota */ }
-  }
-
-  async function loadBundledListas() {
-    var res = await fetch(LISTAS_JSON, { method: "GET" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+  async function loadPlanilla() {
+    if (state.planilla && state.planilla.byCnv) return state.planilla;
+    setStatus("Cargando planilla diaria FCI…");
+    var res = await fetch(PLANILLA_JSON, { method: "GET" });
+    if (!res.ok) throw new Error("No pude cargar la planilla FCI local (assets/data/planilla-fci.json).");
     var data = await res.json();
-    if (!data || !data.fondos || !data.fondos.length) throw new Error("Listado local vacío");
-    return {
-      fondos: data.fondos,
-      gerentes: data.gerentes || [],
-      depositarias: data.depositarias || [],
-      cuitById: data.cuitById || {},
-      cuitGerenteById: data.cuitGerenteById || {}
-    };
+    if (!data || !data.byCnv) throw new Error("La planilla FCI local está vacía o inválida.");
+    state.planilla = data;
+    fillDatalist("lista-gerentes", data.gerentes || []);
+    fillDatalist("lista-depositarias", data.depositarias || []);
+    return data;
   }
 
-  function cuitFromListas(listas, id, rol) {
-    if (!id || !listas) return null;
-    if (rol === "gerente" && listas.cuitGerenteById && listas.cuitGerenteById[id]) {
-      return soloDigitos(listas.cuitGerenteById[id]);
-    }
-    if (listas.cuitById && listas.cuitById[id]) return soloDigitos(listas.cuitById[id]);
-    return null;
-  }
-
-  function matchOpcion(nombre, opciones) {
-    if (!nombre || !opciones || !opciones.length) return [null, ""];
+  function cuitByOrganName(planilla, nombre, rol) {
+    if (!nombre || !planilla) return null;
     var n = norm(nombre);
-    var best = [null, ""];
+    var map = rol === "gerente" ? (planilla.cuitByGerenteName || {}) : (planilla.cuitByDepName || {});
+    if (map[n]) return soloDigitos(map[n]);
+    var bestK = "";
     var bestP = 0;
-    for (var i = 0; i < opciones.length; i++) {
-      var cand = opciones[i];
-      var cn = norm(cand[1]);
-      var p = puntaje(nombre, cand[1]);
-      if (cn === n || cn.indexOf(n) !== -1 || n.indexOf(cn) !== -1) p = Math.max(p, 0.96);
-      if (p > bestP) {
-        bestP = p;
-        best = cand;
-      }
-    }
-    return bestP >= 0.8 ? best : [null, ""];
+    Object.keys(map).forEach(function (k) {
+      var p = puntaje(nombre, k);
+      if (n.indexOf(k) !== -1 || k.indexOf(n) !== -1) p = Math.max(p, 0.95);
+      if (p > bestP) { bestP = p; bestK = k; }
+    });
+    return bestP >= 0.85 ? soloDigitos(map[bestK]) : null;
   }
 
-  // CNV "Composición Semanal Cartera" publishes Gerente / Depositaria as plain labels.
-  function extraerOrganosDesdeTexto(texto) {
-    var flat = String(texto || "").replace(/\s+/g, " ").trim();
-    var m = flat.match(
-      /Gerente\s+(.+?)\s+Depositaria\s+(.+?)(?:\s+Clasificaci|\s+Moneda\b|\s+Regi[oó]n\b|\s+Horizonte\b)/i
-    );
-    if (m) {
-      return { gerente: m[1].replace(/\s+/g, " ").trim(), depositaria: m[2].replace(/\s+/g, " ").trim() };
-    }
-    var g = flat.match(/Gerente\s*[:\-]?\s*([A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9][^|]{3,100}?S\.?\s*A\.?\s*U?\.?)/i);
-    var d = flat.match(/Depositaria\s*[:\-]?\s*([A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9][^|]{3,100}?S\.?\s*A\.?\s*U?\.?)/i);
+  function resolveFromPlanilla(numero, nombreHint) {
+    var planilla = state.planilla;
+    var entry = planilla.byCnv[numero];
+    if (!entry) return null;
     return {
-      gerente: g ? g[1].replace(/\s+/g, " ").trim() : "",
-      depositaria: d ? d[1].replace(/\s+/g, " ").trim() : ""
+      numero_cnv: numero,
+      denominacion_fci: entry.denominacion || nombreHint || "",
+      gerente: entry.gerente || "",
+      depositaria: entry.depositaria || "",
+      cuit_gerente: soloDigitos(entry.cuit_gerente || "") || cuitByOrganName(planilla, entry.gerente, "gerente"),
+      cuit_depositaria: soloDigitos(entry.cuit_depositaria || "") || cuitByOrganName(planilla, entry.depositaria, "depositaria"),
+      from_planilla: true
     };
   }
 
-  function resolverEntidad(nombrePagina, opciones, listas, rol) {
-    var pair = matchOpcion(nombrePagina, opciones);
-    if (!pair[0] && nombrePagina) {
-      // Keep the CNV page name even if dropdown id is unknown.
-      pair = [null, nombrePagina];
-    }
-    var cuit = cuitFromListas(listas, pair[0], rol);
-    if (!cuit && nombrePagina) {
-      // Name → id → CUIT when id matching used a slightly different reason social.
-      var byName = matchOpcion(nombrePagina, opciones);
-      cuit = cuitFromListas(listas, byName[0], rol);
-      if (byName[0]) pair = byName;
-    }
-    return { id: pair[0], nombre: pair[1] || nombrePagina || "", cuit: cuit };
+  // Optional: map planilla denom → CNV website DetallesFCI id (for reglamento links only).
+  function matchIdFciWeb(buscado, elegido) {
+    var fondos = (state.planilla && state.planilla.fondosCnvWeb) || [];
+    if (!fondos.length) return elegido || null;
+    if (elegido) return elegido;
+    if (!buscado) return null;
+    var pick = elegirFondoAuto(buscado, fondos);
+    if (!pick) return null;
+    if (pick.needsPick) return pick;
+    return pick;
   }
 
-  async function ensureListas() {
-    if (state.listas && state.listas.fondos.length) return state.listas;
-
-    var cached = loadListasCache();
-    if (cached) {
-      state.listas = cached;
-      fillDepositariaSelect(cached.depositarias || []);
-      return state.listas;
-    }
-
-    setStatus("Cargando listado de fondos…");
+  async function fetchDocsFci(idFci) {
+    if (!idFci) return [];
     try {
-      var bundled = await loadBundledListas();
-      state.listas = bundled;
-      saveListasCache(bundled);
-      fillDepositariaSelect(bundled.depositarias);
-      return bundled;
+      var detHtml = await fetchText(URL_FCI_DET + idFci);
+      return docsFromContent(detHtml, URL_FCI_DET + idFci, "").docs;
     } catch (e) {
-      // Fallback: scrape CNV home via proxy (slow; avoided when bundled JSON is available).
-      setStatus("Cargando listado de fondos de la CNV…");
-      var html = await fetchText(URL_FCI_HOME);
-      var listas = leerDesplegables(html);
-      if (!listas.fondos.length) throw new Error("No pude leer el listado de fondos de la CNV.");
-      state.listas = listas;
-      saveListasCache(listas);
-      fillDepositariaSelect(listas.depositarias);
-      return listas;
+      return [];
     }
   }
 
   async function descubrirFondo(numero, buscado, elegido) {
-    var listas = await ensureListas();
-    if (!elegido) {
-      var pick = elegirFondoAuto(buscado, listas.fondos);
-      if (!pick) throw new Error("No se encontró el fondo en la CNV.");
-      if (pick.needsPick) {
-        state.pendingMatches = { numero: numero, buscado: buscado, ranking: pick.ranking };
-        showMatches(pick.ranking);
-        throw new Error("Elegí el fondo de la lista de coincidencias.");
-      }
-      elegido = pick;
-    }
-    var idFci = elegido[0];
-    var nombreCnv = elegido[1];
-
+    var planilla = await loadPlanilla();
     var overrideG = soloDigitos($("cuit-gerente").value);
     var overrideD = soloDigitos($("cuit-depositaria").value);
-    var depSel = $("depositaria-select").value;
-    var depPair = [null, ""];
-    if (depSel) {
-      var found = listas.depositarias.find(function (o) { return o[0] === depSel; });
-      if (found) depPair = found;
-    }
+    var manualGer = ($("nombre-gerente").value || "").trim();
+    var manualDep = ($("nombre-depositaria").value || "").trim();
 
-    setStatus("Leyendo ficha del fondo: " + nombreCnv + "…");
-    var detHtml = await fetchText(URL_FCI_DET + idFci);
-    var detDoc = parseDoc(detHtml);
-    var texto = ((detDoc.body && detDoc.body.textContent) || "") + "\n" + detHtml;
-    var docsFci = docsFromContent(detHtml, URL_FCI_DET + idFci, "").docs;
-
-    // Prefer the Composición Semanal labels (public CNV data), then dropdown-name scan.
-    var organos = extraerOrganosDesdeTexto(texto);
-    if (!organos.depositaria || !organos.gerente) {
-      // Jina fallback: reliable for Gerente/Depositaria when HTML proxies drop that block.
-      try {
-        var jinaTxt = await fetchViaProxy("https://r.jina.ai/" + URL_FCI_DET + idFci);
-        var organosJ = extraerOrganosDesdeTexto(jinaTxt);
-        if (!organos.gerente && organosJ.gerente) organos.gerente = organosJ.gerente;
-        if (!organos.depositaria && organosJ.depositaria) organos.depositaria = organosJ.depositaria;
-        texto += "\n" + jinaTxt;
-      } catch (e) { /* keep HTML parse result */ }
-    }
-
-    var gerPair = entidadEnTexto(texto, listas.gerentes, "GERENTE");
-    var depFromPage = entidadEnTexto(texto, listas.depositarias, "DEPOSITARI");
-    if (!depPair[0] && depFromPage[0]) depPair = depFromPage;
-
-    setStatus("Obteniendo CUITs…");
-    var gerRes = resolverEntidad(organos.gerente || gerPair[1] || "", listas.gerentes, listas, "gerente");
-    var depRes = resolverEntidad(
-      organos.depositaria || depPair[1] || "",
-      listas.depositarias,
-      listas,
-      "depositaria"
-    );
-    if (!depPair[0] && depRes.id) depPair = [depRes.id, depRes.nombre];
-
-    var gerente = gerRes.nombre || gerPair[1] || "";
-    var depositaria = depRes.nombre || depPair[1] || "";
-    var cuitG = overrideG.length === 11 ? overrideG : gerRes.cuit;
-    var cuitD = overrideD.length === 11 ? overrideD : depRes.cuit;
-
-    if (!cuitG) cuitG = cuitFromListas(listas, gerPair[0], "gerente");
-    if (!cuitD) cuitD = cuitFromListas(listas, depPair[0], "depositaria");
-
-    // One AIF title fetch for gerente if still missing.
-    if (!cuitG) {
-      var fromDocs = await cuitPorDocumentos(gerente, docsFci.map(function (d) { return d.link; }), 1);
-      if (fromDocs[1]) {
-        cuitG = fromDocs[1];
-        gerente = gerente || fromDocs[0] || "";
-      }
-    }
-
-    // Depositaria CUIT from AIF title of a matching hechos/doc link on the fund page, if needed.
-    if (!cuitD && depositaria) {
-      var depLinks = linksAif(detDoc);
-      var depCuit = await cuitPorDocumentos(depositaria, depLinks, 2);
-      if (depCuit[1]) {
-        cuitD = depCuit[1];
-        depositaria = depositaria || depCuit[0] || "";
-      }
-    }
-
-    if (!cuitG || !cuitD) {
-      var missing = [];
-      if (!cuitG) missing.push("CUIT Gerente");
-      if (!cuitD) {
-        missing.push(
-          "CUIT Depositaria" +
-            (depositaria ? " (" + depositaria + ")" : "") +
-            " — no se pudo leer de la CNV; elegí Depositaria o cargá el CUIT"
+    var fondo = resolveFromPlanilla(numero, buscado);
+    if (!fondo) {
+      if (!manualGer || !manualDep) {
+        throw new Error(
+          "El N° CNV " + numero + " no está en la planilla diaria. Completá la denominación de Sociedad Gerente y Sociedad Depositaria para continuar."
         );
       }
-      throw new Error("Falta completar: " + missing.join(" · ") + ". Completá los campos y volvé a generar.");
+      if (!buscado) {
+        throw new Error("Ingresá también la denominación aproximada del FCI.");
+      }
+      fondo = {
+        numero_cnv: numero,
+        denominacion_fci: buscado,
+        gerente: manualGer,
+        depositaria: manualDep,
+        cuit_gerente: cuitByOrganName(planilla, manualGer, "gerente"),
+        cuit_depositaria: cuitByOrganName(planilla, manualDep, "depositaria"),
+        from_planilla: false
+      };
+      setStatus("Fondo nuevo (fuera de planilla). Usando Gerente/Depositaria ingresados…");
+    } else {
+      setStatus("Planilla: " + fondo.denominacion_fci + " · Gerente " + fondo.gerente + " · Depositaria " + fondo.depositaria);
+      if (manualGer) fondo.gerente = manualGer;
+      if (manualDep) fondo.depositaria = manualDep;
+      if (buscado && !fondo.denominacion_fci) fondo.denominacion_fci = buscado;
     }
 
-    return {
-      numero_cnv: numero,
-      denominacion_fci: nombreCnv,
-      gerente: gerente,
-      cuit_gerente: cuitG,
-      depositaria: depositaria,
-      cuit_depositaria: cuitD,
-      id_fci_cnv: idFci,
-      docs_fci: docsFci
-    };
+    if (overrideG.length === 11) fondo.cuit_gerente = overrideG;
+    if (overrideD.length === 11) fondo.cuit_depositaria = overrideD;
+    if (!fondo.cuit_gerente) fondo.cuit_gerente = cuitByOrganName(planilla, fondo.gerente, "gerente");
+    if (!fondo.cuit_depositaria) fondo.cuit_depositaria = cuitByOrganName(planilla, fondo.depositaria, "depositaria");
+
+    // Resolve CNV web fund id only to pull reglamento / balances del FCI.
+    var idPick = matchIdFciWeb(fondo.denominacion_fci || buscado, elegido || null);
+    if (idPick && idPick.needsPick) {
+      state.pendingMatches = { numero: numero, buscado: fondo.denominacion_fci || buscado, ranking: idPick.ranking };
+      state.pendingFondo = fondo;
+      showMatches(idPick.ranking);
+      throw new Error("Elegí el fondo de la lista de coincidencias.");
+    }
+    if (idPick) {
+      fondo.id_fci_cnv = idPick[0];
+      if (!fondo.denominacion_fci) fondo.denominacion_fci = idPick[1];
+      setStatus("Buscando documentación del fondo en la CNV…");
+      fondo.docs_fci = await fetchDocsFci(fondo.id_fci_cnv);
+    } else {
+      fondo.docs_fci = [];
+    }
+
+    // CUIT Gerente from AIF title on fund docs if still missing.
+    if (!fondo.cuit_gerente && fondo.docs_fci && fondo.docs_fci.length) {
+      var fromDocs = await cuitPorDocumentos(fondo.gerente, fondo.docs_fci.map(function (d) { return d.link; }), 1);
+      if (fromDocs[1]) {
+        fondo.cuit_gerente = fromDocs[1];
+        fondo.gerente = fondo.gerente || fromDocs[0] || "";
+      }
+    }
+
+    if (!fondo.cuit_gerente || !fondo.cuit_depositaria) {
+      var missing = [];
+      if (!fondo.cuit_gerente) missing.push("CUIT Gerente (" + (fondo.gerente || "sin nombre") + ")");
+      if (!fondo.cuit_depositaria) missing.push("CUIT Depositaria (" + (fondo.depositaria || "sin nombre") + ")");
+      throw new Error(
+        "Falta completar: " + missing.join(" · ") +
+        ". Cargá el/los CUIT en los campos opcionales (o revisá las denominaciones) y volvé a generar."
+      );
+    }
+
+    return fondo;
   }
 
   function showMatches(ranking) {
@@ -1330,15 +1118,20 @@
       var numero = soloDigitos($("numero-cnv").value);
       if (!numero) throw new Error("Ingresá el N° CNV del fondo.");
       var nombre = ($("nombre-fci").value || "").trim();
-      var cache = loadFondosCache()[numero];
-      var fondo;
+      var manualGer = ($("nombre-gerente").value || "").trim();
+      var manualDep = ($("nombre-depositaria").value || "").trim();
       var overrideG = soloDigitos($("cuit-gerente").value);
       var overrideD = soloDigitos($("cuit-depositaria").value);
-      if (!elegido && cache && cache.cuit_gerente && cache.cuit_depositaria && !overrideG && !overrideD) {
+      var cache = loadFondosCache()[numero];
+      var fondo;
+      // Reuse cache only when user isn't overriding organs / CUITs and we aren't picking a CNV match.
+      var canUseCache = !elegido && cache && cache.cuit_gerente && cache.cuit_depositaria
+        && !overrideG && !overrideD && !manualGer && !manualDep;
+      if (canUseCache) {
         fondo = cache;
         setStatus("Usando datos guardados de " + fondo.denominacion_fci + "…");
       } else {
-        if (!nombre && !elegido) throw new Error("Ingresá la denominación aproximada del FCI.");
+        // Nombre is optional when the N° is in the planilla; descubrirFondo asks only if needed.
         fondo = await descubrirFondo(numero, nombre, elegido || null);
         saveFondoCache(fondo);
       }
@@ -1392,6 +1185,6 @@
     }, 1000);
   });
 
-  // Populate depositaria select from bundled/cached list (no CNV round-trip).
-  ensureListas().catch(function () { /* ignore until user runs */ });
+  // Warm planilla + Gerente/Depositaria datalists (no CNV list scrape).
+  loadPlanilla().catch(function () { /* ignore until user runs */ });
 })();

@@ -23,17 +23,18 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Documentación FCI (CNV)</h2>
-        <p class="tool-desc">Buscá un fondo en la CNV y descargá un Excel con los links a la documentación pública (reglamento, balances, estatutos, nóminas y actas). Pensado para cualquier ALYC. El logo de tu empresa es opcional y, si lo cargás, figura en el Excel.</p>
+        <p class="tool-desc">Con el N° CNV se resuelven Gerente y Depositaria desde la planilla diaria FCI; después se buscan los docs públicos en la CNV y se arma el Excel. Si el fondo es nuevo y no está en la planilla, completá solo las denominaciones de Gerente y Depositaria. El logo es opcional.</p>
 
         <form id="form-cnv-fci" novalidate action="javascript:void(0);">
           <div class="form-grid">
             <div class="form-group">
               <label for="numero-cnv">N° CNV del fondo</label>
-              <input type="text" id="numero-cnv" name="numero_cnv" placeholder="Ej: 1491" inputmode="numeric" autocomplete="off" required>
+              <input type="text" id="numero-cnv" name="numero_cnv" placeholder="Ej: 1985" inputmode="numeric" autocomplete="off" required>
             </div>
             <div class="form-group">
               <label for="nombre-fci">Denominación del FCI (aproximada)</label>
-              <input type="text" id="nombre-fci" name="nombre_fci" placeholder="Ej: champaqui ahorro dolares" autocomplete="off" required>
+              <input type="text" id="nombre-fci" name="nombre_fci" placeholder="Ej: gmc multiestrategia II" autocomplete="off">
+              <span class="form-hint">Opcional si el N° está en la planilla; útil para ubicar el reglamento en la CNV.</span>
             </div>
             <div class="form-group">
               <label for="anios">Años a consultar</label>
@@ -43,14 +44,17 @@
             <div class="form-group">
               <label for="logo-empresa">Logo de la empresa (opcional)</label>
               <input type="file" id="logo-empresa" name="logo" accept="image/png,image/jpeg,image/webp,image/gif">
-              <span class="form-hint">Si lo cargás, se inserta en el encabezado del Excel. Sin logo también funciona.</span>
+              <span class="form-hint">Si lo cargás, se inserta en el encabezado del Excel.</span>
             </div>
-            <div class="form-group">
-              <label for="depositaria-select">Sociedad Depositaria (si no se detecta sola)</label>
-              <select id="depositaria-select" name="depositaria">
-                <option value="">— Elegir de la lista CNV —</option>
-              </select>
-              <span class="form-hint">Si la ficha del fondo ya trae Depositaria, no hace falta elegirla.</span>
+            <div class="form-group" id="wrap-nombre-gerente">
+              <label for="nombre-gerente">Sociedad Gerente (solo si el fondo no está en la planilla)</label>
+              <input type="text" id="nombre-gerente" name="nombre_gerente" placeholder="Ej: GMC Asset Management S.A.U." list="lista-gerentes" autocomplete="off">
+              <datalist id="lista-gerentes"></datalist>
+            </div>
+            <div class="form-group" id="wrap-nombre-depositaria">
+              <label for="nombre-depositaria">Sociedad Depositaria (solo si el fondo no está en la planilla)</label>
+              <input type="text" id="nombre-depositaria" name="nombre_depositaria" placeholder="Ej: Banco de Valores S.A." list="lista-depositarias" autocomplete="off">
+              <datalist id="lista-depositarias"></datalist>
             </div>
             <div class="form-group">
               <label for="cuit-gerente">CUIT Gerente (opcional / override)</label>
@@ -68,7 +72,7 @@
 
         <div id="match-wrap" class="result-wrap" style="display: none;">
           <div class="result-block has-result">
-            <p class="tool-desc" style="margin-bottom: 0.75rem;">Varias coincidencias en el listado CNV. Elegí el fondo correcto:</p>
+            <p class="tool-desc" style="margin-bottom: 0.75rem;">Varias coincidencias de fondo en la CNV para el reglamento. Elegí la correcta:</p>
             <div id="match-list" class="match-list"></div>
           </div>
         </div>
