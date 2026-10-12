@@ -23,19 +23,15 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Calculadora de garantías</h2>
-        <p class="tool-desc">Simula si tu cartera alcanza para garantizar una caución. Cargá Precios, Garantías aceptadas y tu archivo con especies y VN. Descargá la plantilla, completala y subila.</p>
+        <p class="tool-desc">Simula si tu cartera alcanza para garantizar una caución. Los precios se toman del cierre del último día hábil (misma API Data912 que el ticker). Cargá Garantías aceptadas y tu cartera (ticker / cód. CVSA / VN).</p>
 
         <div class="form-group">
           <a href="assets/plantilla_gara.xlsx" class="btn btn-secondary" download="plantilla_gara.xlsx">Descargar plantilla</a>
-          <span class="form-hint">Completala con Código CVSA (o Ticker) y Cantidad de VN; luego subila abajo.</span>
+          <span class="form-hint">Completala con ticker, código CVSA y cantidad de VN; luego subila abajo.</span>
         </div>
 
         <form id="form-garantias" novalidate action="javascript:void(0);">
           <div class="form-grid">
-            <div class="form-group">
-              <label for="file-precios">Precios</label>
-              <input type="file" id="file-precios" name="precios" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-            </div>
             <div class="form-group">
               <label for="file-garantias">Garantías aceptadas</label>
               <input type="file" id="file-garantias" name="garantias" accept=".csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
@@ -98,6 +94,7 @@
   </div>
 
   <script src="assets/xlsx.full.min.js"></script>
+  <script src="assets/js/data912-prices.js"></script>
   <script>
     (function () {
       "use strict";
@@ -258,8 +255,32 @@
         }
       }
 
+      function findOptionalCol(cols, candidates) {
+        try {
+          return findCol(cols, candidates, null, false, "");
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function resolveCarteraIdentity(row, tickerCol, cvsaCol, idCol, especieToCod) {
+        var ticker = tickerCol ? String(row[tickerCol] || "").trim().toUpperCase() : "";
+        var cvsaRaw = cvsaCol ? String(row[cvsaCol] || "").trim() : "";
+        var idVal = idCol ? String(row[idCol] || "").trim() : "";
+        var cod = null;
+        if (cvsaRaw && /^\d+$/.test(cvsaRaw)) cod = parseInt(cvsaRaw, 10);
+        if (!ticker && idVal) {
+          if (/^\d+$/.test(idVal)) {
+            if (cod == null) cod = parseInt(idVal, 10);
+          } else {
+            ticker = idVal.toUpperCase();
+          }
+        }
+        if (cod == null && ticker && especieToCod[ticker] != null) cod = especieToCod[ticker];
+        return { ticker: ticker || null, cod: cod };
+      }
+
       function runCalculation() {
-        var filePre = document.getElementById("file-precios").files[0];
         var fileGar = document.getElementById("file-garantias").files[0];
         var fileCar = document.getElementById("file-cartera").files[0];
         var resultadoEl = document.getElementById("resultado");
@@ -271,8 +292,8 @@
         var moneda = document.getElementById("moneda").value;
         var mercado = document.getElementById("mercado").value;
 
-        if (!filePre || !fileGar || !fileCar) {
-          resultadoEl.textContent = "Seleccioná los tres archivos (Precios, Garantías aceptadas, Mi cartera).";
+        if (!fileGar || !fileCar) {
+          resultadoEl.textContent = "Seleccioná Garantías aceptadas y Mi cartera.";
           resultadoEl.classList.add("error");
           resultadoEl.style.display = "block";
           tableWrap.style.display = "none";
@@ -285,45 +306,38 @@
           tableWrap.style.display = "none";
           return;
         }
+        if (!window.Data912Prices || typeof window.Data912Prices.loadPriorBusinessDayCloses !== "function") {
+          resultadoEl.textContent = "No se pudo cargar el módulo de precios Data912.";
+          resultadoEl.classList.add("error");
+          resultadoEl.style.display = "block";
+          tableWrap.style.display = "none";
+          return;
+        }
 
-        readFileAsData(filePre, 1, function (errPre, pre) {
-          if (errPre) {
-            resultadoEl.textContent = "Error Precios: " + errPre.message;
+        resultadoEl.textContent = "Cargando precios (cierre último día hábil, Data912)…";
+        resultadoEl.classList.remove("error", "has-result");
+        resultadoEl.classList.add("empty");
+        resultadoEl.style.display = "block";
+        tableWrap.style.display = "none";
+
+        readFileAsData(fileGar, 0, function (errGar, gar) {
+          if (errGar) {
+            resultadoEl.textContent = "Error Garantías: " + errGar.message;
             resultadoEl.classList.add("error");
-            resultadoEl.style.display = "block";
-            tableWrap.style.display = "none";
             return;
           }
-          readFileAsData(fileGar, 0, function (errGar, gar) {
-            if (errGar) {
-              resultadoEl.textContent = "Error Garantías: " + errGar.message;
+          readFileAsData(fileCar, 0, function (errCar, car) {
+            if (errCar) {
+              resultadoEl.textContent = "Error Mi cartera: " + errCar.message;
               resultadoEl.classList.add("error");
-              resultadoEl.style.display = "block";
-              tableWrap.style.display = "none";
               return;
             }
-            readFileAsData(fileCar, 0, function (errCar, car) {
-              if (errCar) {
-                resultadoEl.textContent = "Error Mi cartera: " + errCar.message;
-                resultadoEl.classList.add("error");
-                resultadoEl.style.display = "block";
-                tableWrap.style.display = "none";
-                return;
-              }
+
+            window.Data912Prices.loadPriorBusinessDayCloses().then(function (pricePack) {
               try {
-                var preCols = pre.headers;
-                var codPre = findCol(preCols, ["Cód.", "Cód", "Cod", "Código", "Codigo", "Código CVSA", "Codigo CVSA"], 0, true, "Precios");
-                var precioCol = findCol(preCols, ["Precio", "Valor", "Precio del título", "Valor del título"], 4, true, "Precios");
-                var denomCol = findCol(preCols, ["Denominación", "Denominacion", "Especie", "Descripción", "Descripcion"], 1, true, "Precios");
-                var preciosDict = buildNumericKeyDict(pre.rows, codPre, precioCol);
-                var denomDict = buildNumericKeyDict(pre.rows, codPre, denomCol);
-                var denomToCod = {};
-                for (var i = 0; i < pre.rows.length; i++) {
-                  var c = parseFloat(pre.rows[i][codPre]);
-                  if (!isNaN(c)) {
-                    var d = String(pre.rows[i][denomCol] || "").trim().toUpperCase();
-                    if (d && !denomToCod[d]) denomToCod[d] = parseInt(c, 10);
-                  }
+                var priceMap = pricePack.prices || {};
+                if (!Object.keys(priceMap).length) {
+                  throw new Error("No se obtuvieron precios desde Data912. Reintentá en unos segundos.");
                 }
 
                 var garCols = gar.headers;
@@ -348,32 +362,50 @@
                 }
                 var especieDict = buildNumericKeyDict(gar.rows, codGar, especieCol || garCols[1] || garCols[0]);
                 var listaDict = buildNumericKeyDict(gar.rows, codGar, listaCol || garCols[3] || garCols[0]);
+                var especieToCod = {};
+                for (var ei = 0; ei < gar.rows.length; ei++) {
+                  var eCod = parseFloat(gar.rows[ei][codGar]);
+                  if (isNaN(eCod)) continue;
+                  var eName = String(gar.rows[ei][especieCol || garCols[1] || ""] || "").trim().toUpperCase();
+                  if (eName && especieToCod[eName] == null) especieToCod[eName] = parseInt(eCod, 10);
+                }
 
                 var carCols = car.headers;
-                var codCarCol = findCol(carCols, ["Código CVSA", "Codigo CVSA", "Código", "Cod", "Ticker", "Ticker "], 0, true, "Mi cartera");
-                var cantCol = findCol(carCols, ["Cantidad", "Valores Nominales", "VN", "Cantidad VN", "Valores nominales"], 1, true, "Mi cartera");
+                var tickerCol = findOptionalCol(carCols, ["Ticker", "Símbolo", "Simbolo", "Symbol"]);
+                var cvsaCol = findOptionalCol(carCols, ["Código CVSA", "Codigo CVSA", "Cod CVSA", "Cód CVSA", "Cod. CVSA", "Cód. CVSA"]);
+                var idCol = null;
+                if (!tickerCol && !cvsaCol) {
+                  idCol = findCol(carCols, ["Código CVSA", "Codigo CVSA", "Código", "Cod", "Ticker", "Ticker "], 0, true, "Mi cartera");
+                }
+                var cantCol = findCol(carCols, ["Cantidad", "Valores Nominales", "VN", "Cantidad VN", "Valores nominales"], tickerCol && cvsaCol ? 2 : 1, true, "Mi cartera");
 
                 var montoFinal = monto + monto * (tasa / 100) * (plazo / 365);
                 var simbolo = moneda === "USD" ? "USD" : "$";
                 var results = [];
                 var totalContrib = 0;
+                var skippedNoPrice = [];
 
                 for (var ri = 0; ri < car.rows.length; ri++) {
                   var r = car.rows[ri];
-                  var idVal = String(r[codCarCol] || "").trim();
-                  var vn = parseFloat(r[cantCol]);
-                  if (!idVal || isNaN(vn) || vn <= 0) continue;
-                  var cod = null;
-                  if (/^\d+$/.test(idVal)) {
-                    cod = parseInt(idVal, 10);
-                  } else {
-                    cod = denomToCod[idVal.toUpperCase()] || parseInt(idVal, 10);
-                    if (isNaN(cod)) cod = null;
+                  var vn = parseFloat(String(r[cantCol] || "").replace(/\./g, "").replace(",", "."));
+                  if (isNaN(vn) || vn <= 0) continue;
+                  var ident = resolveCarteraIdentity(r, tickerCol, cvsaCol, idCol, especieToCod);
+                  var ticker = ident.ticker;
+                  var cod = ident.cod;
+                  if (!ticker && cod == null) continue;
+
+                  var price = ticker ? window.Data912Prices.lookupPrice(priceMap, ticker) : null;
+                  if ((price == null || isNaN(price)) && cod != null) {
+                    var espName = String(especieDict[cod] || "").trim().toUpperCase();
+                    if (espName) price = window.Data912Prices.lookupPrice(priceMap, espName);
+                    if ((price == null || isNaN(price)) && !ticker) ticker = espName || null;
                   }
-                  if (cod === null) continue;
-                  var price = preciosDict[cod];
-                  if (price === undefined || price === null || price === "" || isNaN(parseFloat(price))) continue;
-                  price = parseFloat(price);
+                  if (price == null || isNaN(price)) {
+                    skippedNoPrice.push(ticker || ("CVSA " + cod));
+                    continue;
+                  }
+                  if (cod == null) cod = ticker;
+
                   var lista = String(listaDict[cod] || "");
                   var isFixedIncome = lista.indexOf("Acciones") !== 0 && lista.indexOf("CEDEARS") !== 0;
                   var multiplier = isFixedIncome ? price / 100 : price;
@@ -386,7 +418,9 @@
                   var cupoRaw = cupoDict[cod];
                   var cupoMax = (cupoRaw !== undefined && cupoRaw !== null && cupoRaw !== "") ? parseFloat(cupoRaw) : 0;
                   if (isNaN(cupoMax)) cupoMax = 0;
-                  var especie = especieDict[cod] !== undefined && especieDict[cod] !== null && String(especieDict[cod]).trim() !== "" ? especieDict[cod] : denomDict[cod] || cod;
+                  var especie = especieDict[cod] !== undefined && especieDict[cod] !== null && String(especieDict[cod]).trim() !== ""
+                    ? especieDict[cod]
+                    : (ticker || cod);
                   results.push({
                     cod: cod,
                     especie: especie,
@@ -419,28 +453,43 @@
 
                 var pctTotal = montoFinal > 0 ? (totalContrib / montoFinal) * 100 : 0;
                 var alcanza = totalContrib >= montoFinal;
+                var closeDateLabel = pricePack.closeDate
+                  ? ("Cierre " + pricePack.closeDate + " (último día hábil)")
+                  : "Cierre último día hábil (Data912 /live)";
 
                 resultadoEl.classList.remove("empty", "error");
                 resultadoEl.classList.add("has-result");
                 resultadoEl.style.display = "none";
                 tableWrap.style.display = "block";
 
-                var tableHtml = "<p class=\"result-summary\">Monto inicial: " + simbolo + " " + formatoNumero(monto, 0) + " | Tasa: " + formatoNumero(tasa, 2) + "% | Plazo: " + plazo + " días</p>";
+                var tableHtml = "<p class=\"result-summary\">Precios: " + escapeHtml(closeDateLabel) + " · fuente Data912 (misma API que el ticker)</p>";
+                tableHtml += "<p class=\"result-summary\">Monto inicial: " + simbolo + " " + formatoNumero(monto, 0) + " | Tasa: " + formatoNumero(tasa, 2) + "% | Plazo: " + plazo + " días</p>";
                 tableHtml += "<p class=\"result-summary\"><strong>Monto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "</strong></p>";
                 tableHtml += "<p class=\"result-summary\">Total garantía calculada: " + simbolo + " " + formatoNumero(totalContrib, 2) + " | <strong>" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "</strong></p>";
+                if (skippedNoPrice.length) {
+                  tableHtml += "<p class=\"result-summary\">Sin precio Data912 (omitidas): " + escapeHtml(skippedNoPrice.slice(0, 12).join(", ")) + (skippedNoPrice.length > 12 ? "…" : "") + "</p>";
+                }
                 tableHtml += "<table class=\"result-table\"><thead><tr><th>Cód.</th><th>Especie</th><th>VN</th><th>Precio</th><th>Aforo %</th><th>Contribución " + moneda + "</th><th>% del monto final</th><th>VN usado</th><th>Monto usado " + moneda + "</th><th>VN libre</th></tr></thead><tbody>";
                 var copyLines = ["Cód.\tEspecie\tVN\tPrecio\tAforo %\tContribución " + moneda + "\t% del monto final\tVN usado\tMonto usado " + moneda + "\tVN libre"];
                 for (var i = 0; i < results.length; i++) {
-                  var row = results[i];
-                  tableHtml += "<tr><td>" + row.cod + "</td><td>" + escapeHtml(row.especie) + "</td><td>" + formatoNumero(row.vn, 2) + "</td><td>" + formatoNumero(row.precio, 4) + "</td><td>" + formatoNumero(row.aforoPct, 2) + "</td><td>" + formatoNumero(row.contribucion, 2) + "</td><td>" + formatoNumero(row.pctCobertura, 2) + "%</td><td>" + formatoNumero(row.vnUsado, 2) + "</td><td>" + formatoNumero(row.montoUsado, 2) + "</td><td>" + formatoNumero(row.vnLibre, 2) + "</td></tr>";
-                  copyLines.push([row.cod, row.especie, formatoNumero(row.vn, 2), formatoNumero(row.precio, 4), formatoNumero(row.aforoPct, 2), formatoNumero(row.contribucion, 2), formatoNumero(row.pctCobertura, 2) + "%", formatoNumero(row.vnUsado, 2), formatoNumero(row.montoUsado, 2), formatoNumero(row.vnLibre, 2)].join("\t"));
+                  var rowOut = results[i];
+                  tableHtml += "<tr><td>" + rowOut.cod + "</td><td>" + escapeHtml(rowOut.especie) + "</td><td>" + formatoNumero(rowOut.vn, 2) + "</td><td>" + formatoNumero(rowOut.precio, 4) + "</td><td>" + formatoNumero(rowOut.aforoPct, 2) + "</td><td>" + formatoNumero(rowOut.contribucion, 2) + "</td><td>" + formatoNumero(rowOut.pctCobertura, 2) + "%</td><td>" + formatoNumero(rowOut.vnUsado, 2) + "</td><td>" + formatoNumero(rowOut.montoUsado, 2) + "</td><td>" + formatoNumero(rowOut.vnLibre, 2) + "</td></tr>";
+                  copyLines.push([rowOut.cod, rowOut.especie, formatoNumero(rowOut.vn, 2), formatoNumero(rowOut.precio, 4), formatoNumero(rowOut.aforoPct, 2), formatoNumero(rowOut.contribucion, 2), formatoNumero(rowOut.pctCobertura, 2) + "%", formatoNumero(rowOut.vnUsado, 2), formatoNumero(rowOut.montoUsado, 2), formatoNumero(rowOut.vnLibre, 2)].join("\t"));
                 }
                 tableHtml += "</tbody></table>";
                 tableWrap.innerHTML = tableHtml;
 
-                window._lastResultText = "Monto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "\nTotal garantía: " + simbolo + " " + formatoNumero(totalContrib, 2) + "\n" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "\n\n" + copyLines.join("\n");
+                window._lastResultText = closeDateLabel + "\nMonto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "\nTotal garantía: " + simbolo + " " + formatoNumero(totalContrib, 2) + "\n" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "\n\n" + copyLines.join("\n");
                 window._lastResultsForExcel = results;
-                window._lastGarantiasMeta = { montoFinal: montoFinal, totalContrib: totalContrib, alcanza: alcanza, pctTotal: pctTotal, moneda: moneda, mercado: mercado };
+                window._lastGarantiasMeta = {
+                  montoFinal: montoFinal,
+                  totalContrib: totalContrib,
+                  alcanza: alcanza,
+                  pctTotal: pctTotal,
+                  moneda: moneda,
+                  mercado: mercado,
+                  closeDate: pricePack.closeDate
+                };
               } catch (err) {
                 resultadoEl.textContent = "Error: " + err.message;
                 resultadoEl.classList.add("error");
@@ -449,6 +498,11 @@
                 window._lastResultText = null;
                 window._lastResultsForExcel = null;
               }
+            }).catch(function (err) {
+              resultadoEl.textContent = "Error al cargar precios Data912: " + (err && err.message ? err.message : String(err));
+              resultadoEl.classList.add("error");
+              resultadoEl.style.display = "block";
+              tableWrap.style.display = "none";
             });
           });
         });
