@@ -153,6 +153,8 @@
     return [
       "https://api.allorigins.win/raw?url=" + enc,
       "https://api.allorigins.win/get?url=" + enc,
+      // Jina keeps the Composición Gerente/Depositaria block even when HTML proxies truncate/fail.
+      "https://r.jina.ai/" + url,
       "https://api.codetabs.com/v1/proxy?quest=" + enc
     ];
   }
@@ -215,7 +217,8 @@
     var lastErr = null;
 
     try {
-      return await raceProxies(targets.slice(0, 2));
+      // Race HTML proxies + Jina (Jina preserves Gerente/Depositaria composition text).
+      return await raceProxies(targets.slice(0, 3));
     } catch (e) {
       lastErr = e;
     }
@@ -556,6 +559,57 @@
     return null;
   }
 
+  function matchOpcion(nombre, opciones) {
+    if (!nombre || !opciones || !opciones.length) return [null, ""];
+    var n = norm(nombre);
+    var best = [null, ""];
+    var bestP = 0;
+    for (var i = 0; i < opciones.length; i++) {
+      var cand = opciones[i];
+      var cn = norm(cand[1]);
+      var p = puntaje(nombre, cand[1]);
+      if (cn === n || cn.indexOf(n) !== -1 || n.indexOf(cn) !== -1) p = Math.max(p, 0.96);
+      if (p > bestP) {
+        bestP = p;
+        best = cand;
+      }
+    }
+    return bestP >= 0.8 ? best : [null, ""];
+  }
+
+  // CNV "Composición Semanal Cartera" publishes Gerente / Depositaria as plain labels.
+  function extraerOrganosDesdeTexto(texto) {
+    var flat = String(texto || "").replace(/\s+/g, " ").trim();
+    var m = flat.match(
+      /Gerente\s+(.+?)\s+Depositaria\s+(.+?)(?:\s+Clasificaci|\s+Moneda\b|\s+Regi[oó]n\b|\s+Horizonte\b)/i
+    );
+    if (m) {
+      return { gerente: m[1].replace(/\s+/g, " ").trim(), depositaria: m[2].replace(/\s+/g, " ").trim() };
+    }
+    var g = flat.match(/Gerente\s*[:\-]?\s*([A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9][^|]{3,100}?S\.?\s*A\.?\s*U?\.?)/i);
+    var d = flat.match(/Depositaria\s*[:\-]?\s*([A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9][^|]{3,100}?S\.?\s*A\.?\s*U?\.?)/i);
+    return {
+      gerente: g ? g[1].replace(/\s+/g, " ").trim() : "",
+      depositaria: d ? d[1].replace(/\s+/g, " ").trim() : ""
+    };
+  }
+
+  function resolverEntidad(nombrePagina, opciones, listas, rol) {
+    var pair = matchOpcion(nombrePagina, opciones);
+    if (!pair[0] && nombrePagina) {
+      // Keep the CNV page name even if dropdown id is unknown.
+      pair = [null, nombrePagina];
+    }
+    var cuit = cuitFromListas(listas, pair[0], rol);
+    if (!cuit && nombrePagina) {
+      // Name → id → CUIT when id matching used a slightly different reason social.
+      var byName = matchOpcion(nombrePagina, opciones);
+      cuit = cuitFromListas(listas, byName[0], rol);
+      if (byName[0]) pair = byName;
+    }
+    return { id: pair[0], nombre: pair[1] || nombrePagina || "", cuit: cuit };
+  }
+
   async function ensureListas() {
     if (state.listas && state.listas.fondos.length) return state.listas;
 
@@ -613,19 +667,41 @@
     setStatus("Leyendo ficha del fondo: " + nombreCnv + "…");
     var detHtml = await fetchText(URL_FCI_DET + idFci);
     var detDoc = parseDoc(detHtml);
-    var texto = (detDoc.body && detDoc.body.textContent) || "";
+    var texto = ((detDoc.body && detDoc.body.textContent) || "") + "\n" + detHtml;
+    var docsFci = extraerDocs(detDoc);
+
+    // Prefer the Composición Semanal labels (public CNV data), then dropdown-name scan.
+    var organos = extraerOrganosDesdeTexto(texto);
+    if (!organos.depositaria || !organos.gerente) {
+      // Jina fallback: reliable for Gerente/Depositaria when HTML proxies drop that block.
+      try {
+        var jinaTxt = await fetchViaProxy("https://r.jina.ai/" + URL_FCI_DET + idFci);
+        var organosJ = extraerOrganosDesdeTexto(jinaTxt);
+        if (!organos.gerente && organosJ.gerente) organos.gerente = organosJ.gerente;
+        if (!organos.depositaria && organosJ.depositaria) organos.depositaria = organosJ.depositaria;
+        texto += "\n" + jinaTxt;
+      } catch (e) { /* keep HTML parse result */ }
+    }
+
     var gerPair = entidadEnTexto(texto, listas.gerentes, "GERENTE");
     var depFromPage = entidadEnTexto(texto, listas.depositarias, "DEPOSITARI");
     if (!depPair[0] && depFromPage[0]) depPair = depFromPage;
-    var docsFci = extraerDocs(detDoc);
 
     setStatus("Obteniendo CUITs…");
-    var gerente = gerPair[1] || "";
-    var depositaria = depPair[1] || "";
-    var cuitG = overrideG.length === 11 ? overrideG : null;
-    var cuitD = overrideD.length === 11 ? overrideD : null;
+    var gerRes = resolverEntidad(organos.gerente || gerPair[1] || "", listas.gerentes, listas, "gerente");
+    var depRes = resolverEntidad(
+      organos.depositaria || depPair[1] || "",
+      listas.depositarias,
+      listas,
+      "depositaria"
+    );
+    if (!depPair[0] && depRes.id) depPair = [depRes.id, depRes.nombre];
 
-    // Bundled CUIT map first (no network).
+    var gerente = gerRes.nombre || gerPair[1] || "";
+    var depositaria = depRes.nombre || depPair[1] || "";
+    var cuitG = overrideG.length === 11 ? overrideG : gerRes.cuit;
+    var cuitD = overrideD.length === 11 ? overrideD : depRes.cuit;
+
     if (!cuitG) cuitG = cuitFromListas(listas, gerPair[0], "gerente");
     if (!cuitD) cuitD = cuitFromListas(listas, depPair[0], "depositaria");
 
@@ -637,12 +713,27 @@
         gerente = gerente || fromDocs[0] || "";
       }
     }
-    // Avoid slow/broken RegistrosPublicos + hechos scans (were causing HTTP 408).
+
+    // Depositaria CUIT from AIF title of a matching hechos/doc link on the fund page, if needed.
+    if (!cuitD && depositaria) {
+      var depLinks = linksAif(detDoc);
+      var depCuit = await cuitPorDocumentos(depositaria, depLinks, 2);
+      if (depCuit[1]) {
+        cuitD = depCuit[1];
+        depositaria = depositaria || depCuit[0] || "";
+      }
+    }
 
     if (!cuitG || !cuitD) {
       var missing = [];
       if (!cuitG) missing.push("CUIT Gerente");
-      if (!cuitD) missing.push("CUIT Depositaria (elegí Depositaria en el desplegable o cargá el CUIT)");
+      if (!cuitD) {
+        missing.push(
+          "CUIT Depositaria" +
+            (depositaria ? " (" + depositaria + ")" : "") +
+            " — no se pudo leer de la CNV; elegí Depositaria o cargá el CUIT"
+        );
+      }
       throw new Error("Falta completar: " + missing.join(" · ") + ". Completá los campos y volvé a generar.");
     }
 
