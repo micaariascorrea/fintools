@@ -17,6 +17,10 @@
   var TRAMO_ESTATUTO = 5;
   var STORAGE_KEY = "allinarg_cnv_fci_fondos_v1";
   var STORAGE_EST = "allinarg_cnv_fci_estatutos_v1";
+  var STORAGE_LISTAS = "allinarg_cnv_fci_listas_v1";
+  var LISTAS_JSON = "assets/data/cnv-fci-listas.json";
+  var LISTAS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  var FETCH_TIMEOUT_MS = 25000;
 
   var ACCENT = "1F6FEB";
   var GRAFITO = "2B2B2B";
@@ -144,34 +148,93 @@
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
+  function proxyTargets(url) {
+    var enc = encodeURIComponent(url);
+    return [
+      "https://api.allorigins.win/raw?url=" + enc,
+      "https://api.allorigins.win/get?url=" + enc,
+      "https://api.codetabs.com/v1/proxy?quest=" + enc
+    ];
+  }
+
+  function fetchWithTimeout(url, ms) {
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      if (ctrl) ctrl.abort();
+    }, ms);
+    return fetch(url, { method: "GET", signal: ctrl ? ctrl.signal : undefined })
+      .then(function (res) {
+        clearTimeout(timer);
+        return res;
+      })
+      .catch(function (err) {
+        clearTimeout(timer);
+        throw err;
+      });
+  }
+
+  async function fetchViaProxy(target) {
+    var res = await fetchWithTimeout(target, FETCH_TIMEOUT_MS);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    var text = await res.text();
+    if (target.indexOf("allorigins.win/get?") !== -1) {
+      var parsed = JSON.parse(text);
+      text = parsed.contents || "";
+      if (parsed.status && parsed.status.http_code && parsed.status.http_code >= 400) {
+        throw new Error("HTTP " + parsed.status.http_code);
+      }
+    }
+    if (!text || text.length < 40) throw new Error("Respuesta vacía");
+    if (/error code:\s*50[023]/i.test(text) || /Bad Gateway/i.test(text) || /error code:\s*408/i.test(text)) {
+      throw new Error("Proxy timeout/error");
+    }
+    return text;
+  }
+
+  function raceProxies(targets) {
+    return new Promise(function (resolve, reject) {
+      var pending = targets.length;
+      var errors = [];
+      if (!pending) {
+        reject(new Error("Sin proxies"));
+        return;
+      }
+      targets.forEach(function (t) {
+        fetchViaProxy(t).then(resolve, function (err) {
+          errors.push(err);
+          pending -= 1;
+          if (pending === 0) reject(errors[0] || new Error("Proxy falló"));
+        });
+      });
+    });
+  }
+
   async function fetchText(url, attempt) {
     attempt = attempt || 0;
-    var proxies = [
-      function (u) { return u; },
-      function (u) { return "https://api.allorigins.win/raw?url=" + encodeURIComponent(u); },
-      function (u) { return "https://api.allorigins.win/get?url=" + encodeURIComponent(u); }
-    ];
+    var targets = proxyTargets(url);
     var lastErr = null;
-    for (var i = 0; i < proxies.length; i++) {
+
+    try {
+      return await raceProxies(targets.slice(0, 2));
+    } catch (e) {
+      lastErr = e;
+    }
+
+    for (var i = 0; i < targets.length; i++) {
       try {
-        var target = proxies[i](url);
-        var res = await fetch(target, { method: "GET" });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        var text = await res.text();
-        if (target.indexOf("allorigins.win/get?") !== -1) {
-          var parsed = JSON.parse(text);
-          text = parsed.contents || "";
-        }
-        if (!text || text.length < 40) throw new Error("Respuesta vacía");
-        if (/error code:\s*502/i.test(text) || /Bad Gateway/i.test(text)) throw new Error("Proxy 502");
-        return text;
+        return await fetchViaProxy(targets[i]);
       } catch (e) {
         lastErr = e;
       }
     }
-    if (attempt < 2) {
-      await sleep(700 * (attempt + 1));
+
+    if (attempt < 1) {
+      await sleep(400);
       return fetchText(url, attempt + 1);
+    }
+    var msg = lastErr && lastErr.message ? lastErr.message : "No se pudo consultar la CNV";
+    if (/408|abort|timeout|Proxy timeout/i.test(msg)) {
+      throw new Error("La CNV/proxy tardó demasiado (timeout). Probá de nuevo en unos segundos.");
     }
     throw lastErr || new Error("No se pudo consultar la CNV");
   }
@@ -444,15 +507,83 @@
     return { needsPick: true, ranking: ranking };
   }
 
+  function loadListasCache() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORAGE_LISTAS) || "null");
+      if (!raw || !raw.fondos || !raw.fondos.length) return null;
+      if (raw.savedAt && Date.now() - raw.savedAt > LISTAS_TTL_MS) return null;
+      // Prefer bundled file when cache lacks CUIT maps (older cache versions).
+      if (!raw.cuitById || !Object.keys(raw.cuitById).length) return null;
+      return raw;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveListasCache(listas) {
+    try {
+      localStorage.setItem(STORAGE_LISTAS, JSON.stringify({
+        savedAt: Date.now(),
+        fondos: listas.fondos,
+        gerentes: listas.gerentes,
+        depositarias: listas.depositarias,
+        cuitById: listas.cuitById || {},
+        cuitGerenteById: listas.cuitGerenteById || {}
+      }));
+    } catch (e) { /* quota */ }
+  }
+
+  async function loadBundledListas() {
+    var res = await fetch(LISTAS_JSON, { method: "GET" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    var data = await res.json();
+    if (!data || !data.fondos || !data.fondos.length) throw new Error("Listado local vacío");
+    return {
+      fondos: data.fondos,
+      gerentes: data.gerentes || [],
+      depositarias: data.depositarias || [],
+      cuitById: data.cuitById || {},
+      cuitGerenteById: data.cuitGerenteById || {}
+    };
+  }
+
+  function cuitFromListas(listas, id, rol) {
+    if (!id || !listas) return null;
+    if (rol === "gerente" && listas.cuitGerenteById && listas.cuitGerenteById[id]) {
+      return soloDigitos(listas.cuitGerenteById[id]);
+    }
+    if (listas.cuitById && listas.cuitById[id]) return soloDigitos(listas.cuitById[id]);
+    return null;
+  }
+
   async function ensureListas() {
     if (state.listas && state.listas.fondos.length) return state.listas;
-    setStatus("Cargando listado de fondos de la CNV…");
-    var html = await fetchText(URL_FCI_HOME);
-    var listas = leerDesplegables(html);
-    if (!listas.fondos.length) throw new Error("No pude leer el listado de fondos de la CNV.");
-    state.listas = listas;
-    fillDepositariaSelect(listas.depositarias);
-    return listas;
+
+    var cached = loadListasCache();
+    if (cached) {
+      state.listas = cached;
+      fillDepositariaSelect(cached.depositarias || []);
+      return state.listas;
+    }
+
+    setStatus("Cargando listado de fondos…");
+    try {
+      var bundled = await loadBundledListas();
+      state.listas = bundled;
+      saveListasCache(bundled);
+      fillDepositariaSelect(bundled.depositarias);
+      return bundled;
+    } catch (e) {
+      // Fallback: scrape CNV home via proxy (slow; avoided when bundled JSON is available).
+      setStatus("Cargando listado de fondos de la CNV…");
+      var html = await fetchText(URL_FCI_HOME);
+      var listas = leerDesplegables(html);
+      if (!listas.fondos.length) throw new Error("No pude leer el listado de fondos de la CNV.");
+      state.listas = listas;
+      saveListasCache(listas);
+      fillDepositariaSelect(listas.depositarias);
+      return listas;
+    }
   }
 
   async function descubrirFondo(numero, buscado, elegido) {
@@ -469,43 +600,44 @@
     }
     var idFci = elegido[0];
     var nombreCnv = elegido[1];
+
+    var overrideG = soloDigitos($("cuit-gerente").value);
+    var overrideD = soloDigitos($("cuit-depositaria").value);
+    var depSel = $("depositaria-select").value;
+    var depPair = [null, ""];
+    if (depSel) {
+      var found = listas.depositarias.find(function (o) { return o[0] === depSel; });
+      if (found) depPair = found;
+    }
+
     setStatus("Leyendo ficha del fondo: " + nombreCnv + "…");
     var detHtml = await fetchText(URL_FCI_DET + idFci);
     var detDoc = parseDoc(detHtml);
     var texto = (detDoc.body && detDoc.body.textContent) || "";
     var gerPair = entidadEnTexto(texto, listas.gerentes, "GERENTE");
-    var depPair = entidadEnTexto(texto, listas.depositarias, "DEPOSITARI");
+    var depFromPage = entidadEnTexto(texto, listas.depositarias, "DEPOSITARI");
+    if (!depPair[0] && depFromPage[0]) depPair = depFromPage;
     var docsFci = extraerDocs(detDoc);
 
-    setStatus("Obteniendo CUITs desde la CNV…");
+    setStatus("Obteniendo CUITs…");
     var gerente = gerPair[1] || "";
     var depositaria = depPair[1] || "";
-    var cuitG = await cuitDesdeValor(gerPair[0], gerente);
+    var cuitG = overrideG.length === 11 ? overrideG : null;
+    var cuitD = overrideD.length === 11 ? overrideD : null;
+
+    // Bundled CUIT map first (no network).
+    if (!cuitG) cuitG = cuitFromListas(listas, gerPair[0], "gerente");
+    if (!cuitD) cuitD = cuitFromListas(listas, depPair[0], "depositaria");
+
+    // One AIF title fetch for gerente if still missing.
     if (!cuitG) {
-      var fromDocs = await cuitPorDocumentos(gerente, docsFci.map(function (d) { return d.link; }));
+      var fromDocs = await cuitPorDocumentos(gerente, docsFci.map(function (d) { return d.link; }), 1);
       if (fromDocs[1]) {
         cuitG = fromDocs[1];
         gerente = gerente || fromDocs[0] || "";
       }
     }
-    if (!cuitG && gerente) cuitG = await cuitDesdeHechos(gerente);
-
-    var depSel = $("depositaria-select").value;
-    if ((!depositaria || !depPair[0]) && depSel) {
-      var found = listas.depositarias.find(function (o) { return o[0] === depSel; });
-      if (found) {
-        depPair = found;
-        depositaria = found[1];
-      }
-    }
-
-    var cuitD = await cuitDesdeValor(depPair[0], depositaria);
-    if (!cuitD && depositaria) cuitD = await cuitDesdeHechos(depositaria);
-
-    var overrideG = soloDigitos($("cuit-gerente").value);
-    var overrideD = soloDigitos($("cuit-depositaria").value);
-    if (overrideG.length === 11) cuitG = overrideG;
-    if (overrideD.length === 11) cuitD = overrideD;
+    // Avoid slow/broken RegistrosPublicos + hechos scans (were causing HTTP 408).
 
     if (!cuitG || !cuitD) {
       var missing = [];
@@ -521,7 +653,8 @@
       cuit_gerente: cuitG,
       depositaria: depositaria,
       cuit_depositaria: cuitD,
-      id_fci_cnv: idFci
+      id_fci_cnv: idFci,
+      docs_fci: docsFci
     };
   }
 
@@ -549,12 +682,26 @@
 
   async function leerFicha(cuit, anios, hasta) {
     hasta = hasta || new Date();
-    var desde = new Date(hasta.getTime());
-    desde.setFullYear(desde.getFullYear() - anios);
-    var params = "fdesde=" + encodeURIComponent(fmtDateCN(desde)) + "&fhasta=" + encodeURIComponent(fmtDateCN(hasta));
-    var url = URL_FICHA + soloDigitos(cuit) + "?" + params;
-    var html = await fetchText(url);
-    return parsearFicha(html, url, cuit);
+    // Progressive windows: big depositarias (e.g. Banco de Valores) blow proxy limits at 3y.
+    var windows = [anios];
+    if (anios > 1) windows.push(1);
+    if (anios > 0) windows.push(0.5);
+    var lastErr = null;
+    for (var i = 0; i < windows.length; i++) {
+      var years = windows[i];
+      var desde = new Date(hasta.getTime());
+      if (years < 1) desde.setMonth(desde.getMonth() - Math.round(years * 12));
+      else desde.setFullYear(desde.getFullYear() - years);
+      var params = "fdesde=" + encodeURIComponent(fmtDateCN(desde)) + "&fhasta=" + encodeURIComponent(fmtDateCN(hasta));
+      var url = URL_FICHA + soloDigitos(cuit) + "?" + params;
+      try {
+        var html = await fetchText(url);
+        return parsearFicha(html, url, cuit);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error("No se pudo leer la ficha CNV");
   }
 
   function parsearFicha(html, url, cuit) {
@@ -584,9 +731,10 @@
     return results;
   }
 
-  async function buscarEstatutos(fichas, anios) {
+  // Light estatuto fill: only local cache / docs already in the ficha window.
+  // Avoids multi-year CNV scans that caused proxy 408 timeouts.
+  async function buscarEstatutos(fichas) {
     var memoria = loadEstatutos();
-    var tareas = [];
     fichas.forEach(function (pair) {
       var ficha = pair[0];
       var cuit = soloDigitos(pair[1]);
@@ -599,54 +747,14 @@
       }
       var m = memoria[cuit];
       if (m && m.link) {
-        var days = (Date.now() - Date.parse(m.consultado)) / 86400000;
-        if (days <= 90) {
-          ficha.docs.push({
-            fecha: m.fecha ? new Date(m.fecha + "T00:00:00") : null,
-            seccion: "Estatutos",
-            descripcion: m.descripcion,
-            documento: m.documento,
-            link: m.link
-          });
-          return;
-        }
+        ficha.docs.push({
+          fecha: m.fecha ? new Date(m.fecha + "T00:00:00") : null,
+          seccion: "Estatutos",
+          descripcion: m.descripcion,
+          documento: m.documento,
+          link: m.link
+        });
       }
-      var hasta = new Date();
-      hasta.setFullYear(hasta.getFullYear() - anios);
-      while (hasta.getFullYear() >= ANIO_MIN_ESTATUTO) {
-        tareas.push({ ficha: ficha, cuit: cuit, hasta: new Date(hasta.getTime()) });
-        hasta = new Date(hasta.getTime());
-        hasta.setFullYear(hasta.getFullYear() - TRAMO_ESTATUTO);
-      }
-    });
-    if (!tareas.length) return;
-
-    await mapPool(tareas, 3, async function (task) {
-      var desde = new Date(task.hasta.getTime());
-      desde.setFullYear(desde.getFullYear() - TRAMO_ESTATUTO);
-      var params = "fdesde=" + encodeURIComponent(fmtDateCN(desde)) + "&fhasta=" + encodeURIComponent(fmtDateCN(task.hasta));
-      try {
-        var html = await fetchText(URL_FICHA + task.cuit + "?" + params);
-        var docs = extraerDocs(parseDoc(html)).filter(esEstatuto);
-        task._docs = docs;
-      } catch (e) {
-        task._docs = [];
-      }
-    });
-
-    var porCuit = {};
-    tareas.forEach(function (task) {
-      if (!porCuit[task.cuit]) porCuit[task.cuit] = { ficha: task.ficha, docs: [] };
-      porCuit[task.cuit].docs = porCuit[task.cuit].docs.concat(task._docs || []);
-    });
-    Object.keys(porCuit).forEach(function (cuit) {
-      var pack = porCuit[cuit];
-      var mejor = null;
-      pack.docs.forEach(function (d) {
-        if (!mejor || ordenRecienteKey(d) > ordenRecienteKey(mejor)) mejor = d;
-      });
-      if (mejor) pack.ficha.docs.push(mejor);
-      saveEstatuto(cuit, mejor);
     });
   }
 
@@ -952,17 +1060,19 @@
 
   async function pipeline(fondo) {
     var anios = parseInt($("anios").value, 10) || 3;
-    var docsFci = [];
-    if (fondo.id_fci_cnv) {
+    var docsFci = fondo.docs_fci || [];
+    if (!docsFci.length && fondo.id_fci_cnv) {
       setStatus("Leyendo documentación del fondo en la CNV…");
       docsFci = extraerDocs(parseDoc(await fetchText(URL_FCI_DET + fondo.id_fci_cnv)));
     }
-    setStatus("Leyendo ficha CNV de la Sociedad Gerente…");
-    var ger = await leerFicha(fondo.cuit_gerente, anios);
-    setStatus("Leyendo ficha CNV de la Sociedad Depositaria…");
-    var dep = await leerFicha(fondo.cuit_depositaria, anios);
-    setStatus("Buscando estatutos vigentes…");
-    await buscarEstatutos([[ger, fondo.cuit_gerente], [dep, fondo.cuit_depositaria]], anios);
+    setStatus("Leyendo fichas CNV (Gerente y Depositaria)…");
+    var pair = await Promise.all([
+      leerFicha(fondo.cuit_gerente, anios),
+      leerFicha(fondo.cuit_depositaria, anios)
+    ]);
+    var ger = pair[0];
+    var dep = pair[1];
+    await buscarEstatutos([[ger, fondo.cuit_gerente], [dep, fondo.cuit_depositaria]]);
     ger.nombre = ger.nombre || fondo.gerente || "";
     dep.nombre = dep.nombre || fondo.depositaria || "";
     var items = clasificar(ger, dep, fondo.denominacion_fci, docsFci);
@@ -1055,6 +1165,6 @@
     }, 1000);
   });
 
-  // Precarga silenciosa del listado para poblar Depositarias
+  // Populate depositaria select from bundled/cached list (no CNV round-trip).
   ensureListas().catch(function () { /* ignore until user runs */ });
 })();
