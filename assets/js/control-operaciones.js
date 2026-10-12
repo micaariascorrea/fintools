@@ -5,12 +5,11 @@
 (function () {
   "use strict";
 
-  var DEFAULT_THRESHOLD = 200000000;
   var REQUIRED_COLS = ["Client ID", "Symbol", "Side", "Executed Size", "Turnover"];
 
   var lastRawRows = null;
   var lastPivotRows = null;
-  var lastThreshold = DEFAULT_THRESHOLD;
+  var lastThreshold = null;
 
   function parseCSVLine(line, delim) {
     var out = [];
@@ -410,7 +409,12 @@
       return;
     }
 
-    var threshold = parseThreshold(thresholdInput ? thresholdInput.value : "");
+    var thresholdRaw = thresholdInput ? String(thresholdInput.value || "").trim() : "";
+    if (!thresholdRaw) {
+      setStatus("Ingresá el umbral de alerta en ARS.", "error");
+      return;
+    }
+    var threshold = parseThreshold(thresholdRaw);
     if (!isFinite(threshold)) {
       setStatus("Umbral de alerta inválido.", "error");
       return;
@@ -444,9 +448,6 @@
 
   function init() {
     var thresholdInput = document.getElementById("umbral-alerta");
-    if (thresholdInput && !thresholdInput.value) {
-      thresholdInput.value = formatInputMonto(DEFAULT_THRESHOLD);
-    }
 
     var btn = document.getElementById("btn-procesar");
     if (btn) btn.addEventListener("click", run);
@@ -467,7 +468,9 @@
 
     if (thresholdInput) {
       thresholdInput.addEventListener("blur", function () {
-        var n = parseThreshold(thresholdInput.value);
+        var raw = String(thresholdInput.value || "").trim();
+        if (!raw) return;
+        var n = parseThreshold(raw);
         if (isFinite(n)) thresholdInput.value = formatInputMonto(n);
       });
     }
