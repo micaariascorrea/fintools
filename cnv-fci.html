@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentación FCI (CNV) | Financial Tools</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap" aria-label="Precios de mercado">
+    <div id="ticker-bar" class="ticker-bar"></div>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+      <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+      <h1>Financial Tools</h1>
+      <p class="subtitle">ALLINARG</p>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Documentación FCI (CNV)</h2>
+        <p class="tool-desc">Buscá un fondo en la CNV y descargá un Excel con los links a la documentación pública (reglamento, balances, estatutos, nóminas y actas). Pensado para cualquier ALYC. El logo de tu empresa es opcional y, si lo cargás, figura en el Excel.</p>
+
+        <form id="form-cnv-fci" novalidate action="javascript:void(0);">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="numero-cnv">N° CNV del fondo</label>
+              <input type="text" id="numero-cnv" name="numero_cnv" placeholder="Ej: 1491" inputmode="numeric" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+              <label for="nombre-fci">Denominación del FCI (aproximada)</label>
+              <input type="text" id="nombre-fci" name="nombre_fci" placeholder="Ej: champaqui ahorro dolares" autocomplete="off" required>
+            </div>
+            <div class="form-group">
+              <label for="anios">Años a consultar</label>
+              <input type="number" id="anios" name="anios" value="3" min="1" max="15" step="1">
+              <span class="form-hint">Ventana hacia atrás en las fichas CNV de Gerente y Depositaria.</span>
+            </div>
+            <div class="form-group">
+              <label for="logo-empresa">Logo de la empresa (opcional)</label>
+              <input type="file" id="logo-empresa" name="logo" accept="image/png,image/jpeg,image/webp,image/gif">
+              <span class="form-hint">Si lo cargás, se inserta en el encabezado del Excel. Sin logo también funciona.</span>
+            </div>
+            <div class="form-group">
+              <label for="depositaria-select">Sociedad Depositaria (si no se detecta sola)</label>
+              <select id="depositaria-select" name="depositaria">
+                <option value="">— Elegir de la lista CNV —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="cuit-gerente">CUIT Gerente (opcional / override)</label>
+              <input type="text" id="cuit-gerente" name="cuit_gerente" placeholder="11 dígitos" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label for="cuit-depositaria">CUIT Depositaria (opcional / override)</label>
+              <input type="text" id="cuit-depositaria" name="cuit_depositaria" placeholder="11 dígitos" inputmode="numeric" autocomplete="off">
+            </div>
+            <div class="form-actions">
+              <button type="button" id="btn-buscar">Buscar y generar Excel</button>
+            </div>
+          </div>
+        </form>
+
+        <div id="match-wrap" class="result-wrap" style="display: none;">
+          <div class="result-block has-result">
+            <p class="tool-desc" style="margin-bottom: 0.75rem;">Varias coincidencias en el listado CNV. Elegí el fondo correcto:</p>
+            <div id="match-list" class="match-list"></div>
+          </div>
+        </div>
+
+        <div class="result-wrap">
+          <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
+          <div id="result-table-wrap" class="result-table-wrap" style="display: none;"></div>
+          <div class="result-actions">
+            <button type="button" id="btn-descargar-excel" class="btn btn-icon btn-excel" title="Descargar Excel" aria-label="Descargar Excel" disabled>
+              <svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+        <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
+      </div>
+      <p class="footer-credits">Hecho por Micaela Arias <span class="flag-ar" aria-hidden="true">🇦🇷</span></p>
+    </footer>
+  </div>
+
+  <script src="assets/exceljs.min.js"></script>
+  <script src="assets/js/cnv-fci.js"></script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>
