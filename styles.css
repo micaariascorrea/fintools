@@ -539,7 +539,7 @@ button:active,
   color: #f85149;
 }
 
-/* Tabla resultado Posición de garantías */
+/* Tablas de resultado (garantías, carry, tipos de cambio, etc.) */
 .result-table-wrap {
   margin-top: 1rem;
   overflow-x: auto;
