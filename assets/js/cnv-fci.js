@@ -38,7 +38,9 @@
     ["Gerente", "d) Declaración de beneficiarios finales (≥10%)"],
     ["Gerente", "Formulario W8 BEN-E"],
     ["Depositaria", "c) Titularidad del capital social (registro de accionistas)"],
-    ["Depositaria", "d) Declaración de beneficiarios finales (≥10%)"]
+    ["Depositaria", "d) Declaración de beneficiarios finales (≥10%)"],
+    ["Nota", "Casilla de mail para CVSA"],
+    ["Nota", "Firmas de apoderados"]
   ];
 
   var state = {
@@ -148,15 +150,18 @@
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
-  function proxyTargets(url) {
+  function proxyTargetsHtml(url) {
     var enc = encodeURIComponent(url);
     return [
       "https://api.allorigins.win/raw?url=" + enc,
       "https://api.allorigins.win/get?url=" + enc,
-      // Jina keeps the Composición Gerente/Depositaria block even when HTML proxies truncate/fail.
-      "https://r.jina.ai/" + url,
       "https://api.codetabs.com/v1/proxy?quest=" + enc
     ];
+  }
+
+  function proxyTargets(url) {
+    // Jina last for generic fetch; fund-detail organ text uses it explicitly.
+    return proxyTargetsHtml(url).concat(["https://r.jina.ai/" + url]);
   }
 
   function fetchWithTimeout(url, ms) {
@@ -211,18 +216,14 @@
     });
   }
 
-  async function fetchText(url, attempt) {
+  async function fetchTextFromTargets(url, targets, attempt) {
     attempt = attempt || 0;
-    var targets = proxyTargets(url);
     var lastErr = null;
-
     try {
-      // Race HTML proxies + Jina (Jina preserves Gerente/Depositaria composition text).
-      return await raceProxies(targets.slice(0, 3));
+      return await raceProxies(targets.slice(0, Math.min(2, targets.length)));
     } catch (e) {
       lastErr = e;
     }
-
     for (var i = 0; i < targets.length; i++) {
       try {
         return await fetchViaProxy(targets[i]);
@@ -230,16 +231,24 @@
         lastErr = e;
       }
     }
-
     if (attempt < 1) {
       await sleep(400);
-      return fetchText(url, attempt + 1);
+      return fetchTextFromTargets(url, targets, attempt + 1);
     }
     var msg = lastErr && lastErr.message ? lastErr.message : "No se pudo consultar la CNV";
     if (/408|abort|timeout|Proxy timeout/i.test(msg)) {
       throw new Error("La CNV/proxy tardó demasiado (timeout). Probá de nuevo en unos segundos.");
     }
     throw lastErr || new Error("No se pudo consultar la CNV");
+  }
+
+  async function fetchText(url, attempt) {
+    return fetchTextFromTargets(url, proxyTargets(url), attempt);
+  }
+
+  // HTML-only: required for empresa fichas so table rows parse into docs (Jina markdown skips <tr>).
+  async function fetchTextHtml(url, attempt) {
+    return fetchTextFromTargets(url, proxyTargetsHtml(url), attempt);
   }
 
   function parseDoc(html) {
@@ -323,6 +332,20 @@
       .filter(function (h) { return h && h.toLowerCase().indexOf("publicview") !== -1; });
   }
 
+  function pushDoc(docs, vistos, fecha, descripcion, documento, link, seccion) {
+    if (!link || link.toLowerCase().indexOf("publicview") === -1) return;
+    var clave = documento || link.toLowerCase();
+    if (vistos[clave]) return;
+    vistos[clave] = 1;
+    docs.push({
+      fecha: fecha || null,
+      seccion: seccion || "",
+      descripcion: descripcion || "",
+      documento: documento || "",
+      link: link
+    });
+  }
+
   function extraerDocs(doc) {
     var docs = [];
     var vistos = {};
@@ -343,9 +366,6 @@
       for (var i = 0; i < celdas.length; i++) {
         if (/^\d{6,8}$/.test(celdas[i])) { documento = celdas[i]; break; }
       }
-      var clave = documento || href.toLowerCase();
-      if (vistos[clave]) return;
-      vistos[clave] = 1;
       var seccionTag = null;
       var node = tr;
       while (node && !seccionTag) {
@@ -364,10 +384,82 @@
         }
       }
       var seccion = seccionTag ? (seccionTag.textContent || "").replace(/\s+/g, " ").trim() : "";
-      docs.push({ fecha: fecha, seccion: seccion, descripcion: descripcion, documento: documento, link: href });
+      pushDoc(docs, vistos, fecha, descripcion, documento, href, seccion);
     });
     docs.sort(function (a, b) { return ordenReciente(b) - ordenReciente(a); });
     return docs;
+  }
+
+  // Parse Jina / markdown tables: | fecha | hora | descripción | doc | [link](publicview...) |
+  function extraerDocsMarkdown(text) {
+    var docs = [];
+    var vistos = {};
+    var re = /\|\s*(\d{1,2}\s+[a-zA-Z]{3}\w*\.?\s+\d{4})\s*\|([^|\n]*)\|([^|\n]*)\|([^|\n]*)\|([^|\n]*publicview[^|\n]*)\|/gi;
+    var m;
+    while ((m = re.exec(text)) !== null) {
+      var fecha = parseFecha(m[1]);
+      var cells = [m[2], m[3], m[4]].map(function (c) {
+        return String(c || "").replace(/\\_/g, "_").replace(/\s+/g, " ").trim();
+      });
+      var descripcion = cells.reduce(function (best, c) { return c.length > best.length ? c : best; }, "");
+      var documento = "";
+      cells.forEach(function (c) {
+        if (/^\d{6,8}$/.test(c)) documento = c;
+      });
+      var linkMatch = m[5].match(/https?:\/\/[^\s\)\]]+publicview[^\s\)\]]+/i);
+      if (!linkMatch) continue;
+      var link = linkMatch[0].replace(/\\/g, "");
+      pushDoc(docs, vistos, fecha, descripcion, documento, link, "");
+    }
+    // Looser: any publicview URL near a fecha + descripción keywords
+    if (!docs.length) {
+      var loose = /((?:\d{1,2}\s+[a-zA-Z]{3}\w*\.?\s+\d{4})[\s\S]{0,240}?https?:\/\/[^\s\)\]]+publicview[^\s\)\]]+)/gi;
+      var lm;
+      while ((lm = loose.exec(text)) !== null) {
+        var chunk = lm[1];
+        var f = parseFecha(chunk);
+        var hrefM = chunk.match(/https?:\/\/[^\s\)\]]+publicview[^\s\)\]]+/i);
+        var docM = chunk.match(/\b(\d{6,8})\b/);
+        if (!hrefM) continue;
+        pushDoc(docs, vistos, f, chunk.replace(hrefM[0], "").replace(/\s+/g, " ").trim().slice(0, 220),
+          docM ? docM[1] : "", hrefM[0].replace(/\\/g, ""), "");
+      }
+    }
+    docs.sort(function (a, b) { return ordenReciente(b) - ordenReciente(a); });
+    return docs;
+  }
+
+  function docsFromContent(content, url, cuit) {
+    var doc = parseDoc(content);
+    var htmlDocs = extraerDocs(doc);
+    var mdDocs = extraerDocsMarkdown(content);
+    var merged = [];
+    var vistos = {};
+    htmlDocs.concat(mdDocs).forEach(function (d) {
+      pushDoc(merged, vistos, d.fecha, d.descripcion, d.documento, d.link, d.seccion);
+    });
+    var dig = soloDigitos(cuit);
+    if (dig) {
+      // Drop rows that explicitly belong to another CUIT (Jina pages sometimes mix feeds).
+      merged = merged.filter(function (d) {
+        var found = String(d.descripcion || "").match(/\d{11}/g) || [];
+        if (!found.length) return true;
+        return found.indexOf(dig) !== -1;
+      });
+    }
+    merged.sort(function (a, b) { return ordenReciente(b) - ordenReciente(a); });
+    var nombre = "";
+    Array.prototype.forEach.call(doc.querySelectorAll("h1, h2"), function (h) {
+      var t = (h.textContent || "").replace(/\s+/g, " ").trim();
+      if (!t || /CUIT/i.test(t) || norm(t).indexOf("EMPRESAS") !== -1 || t.length <= 5) return;
+      if (!nombre) nombre = t.split(/\s{2,}|En Oferta P|Sociedades|Régimen|Regimen/)[0].trim();
+    });
+    if (!nombre) {
+      var nm = String(content).match(/Title:\s*([^\n]+)/i);
+      if (nm) nombre = nm[1].replace(/\s+/g, " ").trim();
+    }
+    nombre = nombre.replace(/\s*\([^)]*\)\s*$/, "");
+    return { nombre: nombre, cuit: cuitFmt(cuit), url: url, docs: merged };
   }
 
   function ordenRecienteKey(d) {
@@ -390,8 +482,10 @@
 
   function esEeccPropio(desc) {
     var d = norm(desc);
-    return d.indexOf("ESTADOS CONTABLES") !== -1 && d.indexOf("NORMA CONTABLE") !== -1
-      && d.indexOf("CONTROLADAS") === -1 && d.indexOf("RELAC.:") === -1;
+    // Covers SG/FCI NCP filings and bank NIIF balances published on CNV.
+    var esBalance = d.indexOf("ESTADOS CONTABLES") !== -1
+      && (d.indexOf("NORMA CONTABLE") !== -1 || d.indexOf("NIIF") !== -1 || d.indexOf("NCP") !== -1);
+    return esBalance && d.indexOf("CONTROLADAS") === -1 && d.indexOf("RELAC.:") === -1;
   }
 
   async function tituloPresentacion(link) {
@@ -668,7 +762,7 @@
     var detHtml = await fetchText(URL_FCI_DET + idFci);
     var detDoc = parseDoc(detHtml);
     var texto = ((detDoc.body && detDoc.body.textContent) || "") + "\n" + detHtml;
-    var docsFci = extraerDocs(detDoc);
+    var docsFci = docsFromContent(detHtml, URL_FCI_DET + idFci, "").docs;
 
     // Prefer the Composición Semanal labels (public CNV data), then dropdown-name scan.
     var organos = extraerOrganosDesdeTexto(texto);
@@ -771,40 +865,51 @@
     wrap.style.display = "block";
   }
 
+  async function leerFichaWindow(cuit, desde, hasta) {
+    var params = "fdesde=" + encodeURIComponent(fmtDateCN(desde)) + "&fhasta=" + encodeURIComponent(fmtDateCN(hasta));
+    var url = URL_FICHA + soloDigitos(cuit) + "?" + params;
+    var htmlFicha = null;
+    var mdFicha = null;
+    await Promise.all([
+      fetchTextHtml(url).then(function (t) { htmlFicha = docsFromContent(t, url, cuit); }).catch(function () {}),
+      fetchViaProxy("https://r.jina.ai/" + url).then(function (t) { mdFicha = docsFromContent(t, url, cuit); }).catch(function () {})
+    ]);
+    if (htmlFicha && htmlFicha.docs.length) {
+      if (mdFicha && mdFicha.docs.length) {
+        var vistos = {};
+        var merged = [];
+        htmlFicha.docs.concat(mdFicha.docs).forEach(function (d) {
+          pushDoc(merged, vistos, d.fecha, d.descripcion, d.documento, d.link, d.seccion);
+        });
+        merged.sort(function (a, b) { return ordenReciente(b) - ordenReciente(a); });
+        htmlFicha.docs = merged;
+        if (!htmlFicha.nombre && mdFicha.nombre) htmlFicha.nombre = mdFicha.nombre;
+      }
+      return htmlFicha;
+    }
+    if (mdFicha && mdFicha.docs.length) return mdFicha;
+    if (htmlFicha) return htmlFicha;
+    throw new Error("No se pudo leer la ficha CNV de " + cuitFmt(cuit));
+  }
+
   async function leerFicha(cuit, anios, hasta) {
     hasta = hasta || new Date();
-    // Progressive windows: big depositarias (e.g. Banco de Valores) blow proxy limits at 3y.
+    // Prefer full window; shrink only if proxies choke on huge depositaria filings.
     var windows = [anios];
+    if (anios > 2) windows.push(2);
     if (anios > 1) windows.push(1);
-    if (anios > 0) windows.push(0.5);
     var lastErr = null;
     for (var i = 0; i < windows.length; i++) {
-      var years = windows[i];
       var desde = new Date(hasta.getTime());
-      if (years < 1) desde.setMonth(desde.getMonth() - Math.round(years * 12));
-      else desde.setFullYear(desde.getFullYear() - years);
-      var params = "fdesde=" + encodeURIComponent(fmtDateCN(desde)) + "&fhasta=" + encodeURIComponent(fmtDateCN(hasta));
-      var url = URL_FICHA + soloDigitos(cuit) + "?" + params;
+      desde.setFullYear(desde.getFullYear() - windows[i]);
       try {
-        var html = await fetchText(url);
-        return parsearFicha(html, url, cuit);
+        var ficha = await leerFichaWindow(cuit, desde, hasta);
+        if (ficha.docs.length) return ficha;
       } catch (e) {
         lastErr = e;
       }
     }
     throw lastErr || new Error("No se pudo leer la ficha CNV");
-  }
-
-  function parsearFicha(html, url, cuit) {
-    var doc = parseDoc(html);
-    var nombre = "";
-    Array.prototype.forEach.call(doc.querySelectorAll("h1, h2"), function (h) {
-      var t = (h.textContent || "").replace(/\s+/g, " ").trim();
-      if (!t || /CUIT/i.test(t) || norm(t).indexOf("EMPRESAS") !== -1 || t.length <= 5) return;
-      if (!nombre) nombre = t.split(/\s{2,}|En Oferta P|Sociedades|Régimen|Regimen/)[0].trim();
-    });
-    nombre = nombre.replace(/\s*\([^)]*\)\s*$/, "");
-    return { nombre: nombre, cuit: cuitFmt(cuit), url: url, docs: extraerDocs(doc) };
   }
 
   async function mapPool(items, limit, worker) {
@@ -822,10 +927,10 @@
     return results;
   }
 
-  // Light estatuto fill: only local cache / docs already in the ficha window.
-  // Avoids multi-year CNV scans that caused proxy 408 timeouts.
+  // Estatuto often sits outside the 3y window (e.g. 2022). One wider fetch per society if missing.
   async function buscarEstatutos(fichas) {
     var memoria = loadEstatutos();
+    var pending = [];
     fichas.forEach(function (pair) {
       var ficha = pair[0];
       var cuit = soloDigitos(pair[1]);
@@ -845,6 +950,31 @@
           documento: m.documento,
           link: m.link
         });
+        return;
+      }
+      pending.push(pair);
+    });
+    if (!pending.length) return;
+
+    await mapPool(pending, 2, async function (pair) {
+      var ficha = pair[0];
+      var cuit = soloDigitos(pair[1]);
+      var hasta = new Date();
+      var desde = new Date(hasta.getTime());
+      desde.setFullYear(ANIO_MIN_ESTATUTO);
+      try {
+        var wide = await leerFichaWindow(cuit, desde, hasta);
+        var est = wide.docs.filter(esEstatuto).sort(function (a, b) {
+          return ordenRecienteKey(b) - ordenRecienteKey(a);
+        });
+        if (est.length) {
+          ficha.docs.push(est[0]);
+          saveEstatuto(cuit, est[0]);
+        } else {
+          saveEstatuto(cuit, null);
+        }
+      } catch (e) {
+        saveEstatuto(cuit, null);
       }
     });
   }
@@ -1008,22 +1138,28 @@
     var sub = "N° CNV " + fondo.numero_cnv + "  ·  Fuente: Comisión Nacional de Valores  ·  Generado el " + fmtDate(new Date());
     var logo = logoInfo ? { buffer: logoInfo.buffer, ext: logoInfo.ext, workbook: wb } : null;
 
-    var ws = wb.addWorksheet("Datos del FCI");
-    await prepararHoja(ws, "Documentación CNV  |  " + nombreFci, sub, [38, 72, 16], logo);
+    // Sheet shape matches the CNV docs Excel template (structure only; sample fund data cleared).
+    var ws = wb.addWorksheet("Datos nota");
+    await prepararHoja(ws, "Apertura de cuenta FCI  |  " + nombreFci, sub, [38, 72, 16], logo);
     var filas = [
       ["Denominación del FCI", nombreFci, ""],
       ["N° CNV del fondo", fondo.numero_cnv, ""],
       ["Denominación Sociedad Depositaria", dep.nombre || fondo.depositaria || "", dep.url],
       ["CUIT/CDI Sociedad Depositaria", dep.cuit, dep.url],
       ["Denominación Sociedad Gerente", ger.nombre || fondo.gerente || "", ger.url],
-      ["CUIT/CDI Sociedad Gerente", ger.cuit, ger.url]
+      ["CUIT/CDI Sociedad Gerente", ger.cuit, ger.url],
+      ["Casilla de mail (se vincula en CVSA)", "PENDIENTE", ""]
     ];
-    encabezado(ws, 6, ["Campo", "Dato", "Fuente"]);
+    encabezado(ws, 6, ["Campo de la nota", "Dato", "Fuente"]);
     filas.forEach(function (row, idx) {
       var r = 7 + idx;
       ws.getRow(r).height = 20;
+      var pend = row[1] === "PENDIENTE";
       celda(ws, r, 1, row[0], { font: font(10, true, GRIS_TXT) });
-      celda(ws, r, 2, row[1], { font: font(11, true) });
+      celda(ws, r, 2, row[1], {
+        font: font(11, true, pend ? ROJO : GRAFITO),
+        fill: pend ? ACCENT_SUAVE : null
+      });
       if (row[2]) linkCelda(ws, r, 3, row[2], "Ficha CNV ↗");
       else celda(ws, r, 3, "");
     });
