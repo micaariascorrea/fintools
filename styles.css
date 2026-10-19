@@ -186,14 +186,7 @@ body:not(.page-interna) .container {
 .header-marks {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
   line-height: 0;
-}
-
-.header-logo-mark {
-  display: block;
-  height: 34px;
-  width: auto;
 }
 
 .site-header-home .header-marks {
@@ -201,7 +194,7 @@ body:not(.page-interna) .container {
   margin-left: 1rem;
 }
 
-/* Isotipo + bandera argentina, arriba a la derecha en internas */
+/* Bandera argentina, arriba a la derecha en internas */
 .site-header:not(.site-header-home) .header-marks {
   position: absolute;
   top: 0.65rem;
@@ -899,10 +892,6 @@ input[type="file"] {
     object-position: left center;
   }
 
-  .header-logo-mark {
-    height: 30px;
-  }
-
   .site-header:not(.site-header-home) {
     display: flex;
     align-items: center;
@@ -1018,14 +1007,6 @@ input[type="file"] {
   .site-logo img,
   .site-header:not(.site-header-home) .site-logo img {
     height: 34px;
-  }
-
-  .header-marks {
-    gap: 0.4rem;
-  }
-
-  .header-logo-mark {
-    height: 26px;
   }
 
   .site-header h1 {
