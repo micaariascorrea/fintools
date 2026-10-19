@@ -6,7 +6,8 @@
   <link rel="icon" href="assets/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
-  <title>Calculadora de garantías | Financial Tools</title>
+  <title>Calculadora de garantías | ALLINARG</title>
+  <meta name="description" content="Simulación de cobertura de una caución tomadora. La cartera y los aforos se procesan en el navegador.">
   <link rel="stylesheet" href="styles.css">
   <style>
     .form-grid .form-group-span { grid-column: 1 / -1; }
@@ -48,6 +49,7 @@
       <section class="form-block">
         <h2 class="tool-title">Calculadora de garantías</h2>
         <p class="tool-desc">Simula si tu cartera alcanza para garantizar una caución. Los precios se toman del cierre del último día hábil (misma API Data912 que el ticker). Elegí el mercado y cargá el portfolio (masiva o manual).</p>
+        <p class="tool-desc">El archivo de cartera y la lista de garantías se leen en el navegador y no se envían a ningún servidor. En BYMA, los aforos son los del archivo que subís: la fecha es la de esa lista. En A3, la lista incluida está actualizada al 12/10/2026, salvo que cargues una más nueva.</p>
 
         <form id="form-garantias" novalidate action="javascript:void(0);">
           <div class="form-grid">
@@ -142,6 +144,7 @@
         <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
         <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
       </div>
+      <p class="footer-disclaimer">Cálculos estimativos, no constituyen recomendación de inversión.</p>
     </footer>
   </div>
 

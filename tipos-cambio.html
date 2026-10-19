@@ -6,7 +6,8 @@
   <link rel="icon" href="assets/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
-  <title>Tipos de cambio | Financial Tools</title>
+  <title>Tipos de cambio | ALLINARG</title>
+  <meta name="description" content="Dólar MEP y CCL al último cierre, con fuente, horario y aviso si el dato tiene más de un día.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="page-interna">
@@ -27,7 +28,9 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Tipos de cambio</h2>
-        <p class="tool-desc">Dólar MEP y CCL al último cierre.</p>
+        <p class="tool-desc">Dólar MEP y CCL. La columna Cierre es el último cierre de rueda.</p>
+        <p id="tc-source" class="market-source" hidden></p>
+        <p id="tc-stale" class="market-stale" hidden></p>
 
         <div class="carry-actions">
           <button type="button" id="btn-actualizar-tc">Actualizar datos</button>
@@ -35,6 +38,7 @@
 
         <div class="result-wrap">
           <div id="mensaje" class="result-block empty" role="status">Cargando…</div>
+          <button type="button" id="btn-reintentar" class="btn btn-secondary btn-retry" hidden>Reintentar</button>
           <div id="tc-wrap" class="result-table-wrap" style="display: none;">
             <table class="result-table">
               <thead>
@@ -58,6 +62,7 @@
         <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
         <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
       </div>
+      <p class="footer-disclaimer">Cálculos estimativos, no constituyen recomendación de inversión.</p>
     </footer>
   </div>
 
@@ -71,41 +76,117 @@
         return n != null && !isNaN(n) ? n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
       }
 
+      function todayYmd() {
+        var parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Argentina/Buenos_Aires",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }).formatToParts(new Date());
+        var y, m, d;
+        parts.forEach(function (p) {
+          if (p.type === "year") y = p.value;
+          if (p.type === "month") m = p.value;
+          if (p.type === "day") d = p.value;
+        });
+        return y + "-" + m + "-" + d;
+      }
+
+      function formatCierre(ymd) {
+        var bits = ymd.split("-");
+        if (bits.length !== 3) return ymd;
+        return bits[2] + "/" + bits[1] + " 17:00";
+      }
+
+      function daysBeforeToday(ymd) {
+        var today = todayYmd().split("-").map(Number);
+        var close = ymd.split("-").map(Number);
+        var t0 = Date.UTC(today[0], today[1] - 1, today[2]);
+        var t1 = Date.UTC(close[0], close[1] - 1, close[2]);
+        return Math.round((t0 - t1) / 86400000);
+      }
+
+      function fetchJson(url) {
+        return fetch(url).then(function (r) {
+          if (!r.ok) throw new Error("Data912 respondió " + r.status);
+          return r.json();
+        });
+      }
+
+      function lastCloseDate() {
+        return fetchJson(BASE + "/historical/bonds/AL30").then(function (arr) {
+          if (!Array.isArray(arr)) return null;
+          var today = todayYmd();
+          var best = null;
+          arr.forEach(function (row) {
+            if (!row || !row.date || row.date >= today) return;
+            if (best == null || row.date > best) best = row.date;
+          });
+          return best;
+        }).catch(function () { return null; });
+      }
+
+      function showError(message) {
+        $("mensaje").textContent = message;
+        $("mensaje").className = "result-block error";
+        $("mensaje").style.display = "block";
+        $("btn-reintentar").hidden = false;
+        $("tc-wrap").style.display = "none";
+        $("tc-source").hidden = true;
+        $("tc-stale").hidden = true;
+      }
+
       function run() {
         $("mensaje").textContent = "Cargando…";
+        $("mensaje").className = "result-block empty";
         $("mensaje").style.display = "block";
+        $("btn-reintentar").hidden = true;
         $("tc-wrap").style.display = "none";
+        $("tc-source").hidden = true;
+        $("tc-stale").hidden = true;
 
         Promise.all([
-          fetch(BASE + "/live/mep").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
-          fetch(BASE + "/live/ccl").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+          fetchJson(BASE + "/live/mep"),
+          fetchJson(BASE + "/live/ccl"),
+          lastCloseDate()
         ]).then(function (results) {
-          var mep = results[0] || [];
-          var ccl = results[1] || [];
+          var mep = Array.isArray(results[0]) ? results[0] : [];
+          var ccl = Array.isArray(results[1]) ? results[1] : [];
+          var closeDate = results[2];
           var mepRow = mep.length ? mep[0] : null;
           var cclRow = ccl.length ? ccl[0] : null;
 
           var rows = [];
           if (mepRow && (mepRow.mark != null || mepRow.close != null)) {
-            rows.push({
-              tipo: "Dólar MEP",
-              bid: mepRow.bid,
-              ask: mepRow.ask,
-              close: mepRow.close,
-              mark: mepRow.mark
-            });
+            rows.push({ tipo: "Dólar MEP", bid: mepRow.bid, ask: mepRow.ask, close: mepRow.close });
           }
           if (cclRow && (cclRow.CCL_mark != null || cclRow.CCL_close != null)) {
-            rows.push({
-              tipo: "Dólar CCL",
-              bid: cclRow.CCL_bid,
-              ask: cclRow.CCL_ask,
-              close: cclRow.CCL_close,
-              mark: cclRow.CCL_mark
-            });
+            rows.push({ tipo: "Dólar CCL", bid: cclRow.CCL_bid, ask: cclRow.CCL_ask, close: cclRow.CCL_close });
+          }
+
+          if (!rows.length) {
+            showError("Data912 no devolvió MEP ni CCL. Probá de nuevo en unos segundos.");
+            return;
+          }
+
+          var source = $("tc-source");
+          if (closeDate) {
+            source.textContent = "Fuente: Data912 · Cierre del " + formatCierre(closeDate) + ". Bid y ask son la punta que publica Data912 al consultar; la columna Cierre es el último cierre de rueda BYMA (17:00).";
+          } else {
+            source.textContent = "Fuente: Data912 · la API no informó la fecha de cierre.";
+          }
+          source.hidden = false;
+
+          var stale = $("tc-stale");
+          if (closeDate && daysBeforeToday(closeDate) > 1) {
+            stale.textContent = "Este cierre tiene más de un día.";
+            stale.hidden = false;
+          } else {
+            stale.hidden = true;
           }
 
           $("mensaje").style.display = "none";
+          $("btn-reintentar").hidden = true;
           $("tc-wrap").style.display = "block";
 
           var tbody = $("tc-body");
@@ -115,15 +196,16 @@
             tr.innerHTML = "<td>" + r.tipo + "</td><td>$ " + format(r.bid) + "</td><td>$ " + format(r.ask) + "</td><td>$ " + format(r.close) + "</td>";
             tbody.appendChild(tr);
           });
-        }).catch(function (err) {
-          $("mensaje").textContent = "Error: " + (err.message || "revisá tu conexión");
-          $("mensaje").className = "result-block error";
+        }).catch(function () {
+          showError("No se pudieron cargar los tipos de cambio. Revisá la conexión e intentá de nuevo.");
         });
       }
 
       run();
       var btnTc = $("btn-actualizar-tc");
       if (btnTc) btnTc.addEventListener("click", run);
+      var btnRetry = $("btn-reintentar");
+      if (btnRetry) btnRetry.addEventListener("click", run);
     })();
   </script>
   <script src="assets/ticker.js"></script>

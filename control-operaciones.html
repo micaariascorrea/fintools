@@ -6,7 +6,8 @@
   <link rel="icon" href="assets/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
-  <title>Control de operaciones | Financial Tools</title>
+  <title>Control de operaciones | ALLINARG</title>
+  <meta name="description" content="Control del CSV de operaciones exportado desde Millenium, con alerta por umbral en pesos. El archivo se lee en el navegador.">
   <link rel="stylesheet" href="styles.css">
   <style>
     .result-block.warning { background: rgba(210, 153, 34, 0.12); border-left: 4px solid #d29922; }
@@ -30,7 +31,7 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Control de operaciones</h2>
-        <p class="tool-desc">Descargá el archivo de control desde Millenium para revisar y controlar todas las operaciones. Cargalo acá (CSV con Client ID, Symbol, Side, Executed Size, Turnover): se arma la tabla dinámica por cliente y símbolo, y se marcan alertas cuando el total alcanza el umbral en ARS que indiques.</p>
+        <p class="tool-desc">Para mesas y middle office de una ALYC. Millenium es el sistema de negociación con el que muchas sociedades de bolsa operan en BYMA. Esta pantalla toma el CSV de operaciones del día (Client ID, Symbol, Side, Executed Size, Turnover), lo lee en el navegador —no se envía a ningún servidor— y arma el total por cliente y símbolo. Marca una alerta cuando ese total llega al umbral en pesos que indiques.</p>
 
         <form id="form-control-ops" novalidate action="javascript:void(0);">
           <div class="form-grid">
@@ -65,6 +66,7 @@
         <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
         <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
       </div>
+      <p class="footer-disclaimer">Cálculos estimativos, no constituyen recomendación de inversión.</p>
     </footer>
   </div>
 
