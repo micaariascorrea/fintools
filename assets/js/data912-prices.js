@@ -247,9 +247,43 @@
     });
   }
 
+  function fxUseful(fx) {
+    if (!fx) return false;
+    return !!((fx.mep && fx.mep.date && fx.mep.close != null) || (fx.ccl && fx.ccl.date && fx.ccl.close != null));
+  }
+
+  function quoteOrNull(q) {
+    if (!q) return null;
+    if (q.bid == null && q.ask == null && q.last == null) return null;
+    return q;
+  }
+
+  function asList(data) {
+    return Array.isArray(data) ? data : [];
+  }
+
+  /** Panel /live/mep: la fila AL30 ya trae bid, ask y el último (campo close). */
+  function mepFromPanel(rows) {
+    var row = null;
+    for (var i = 0; i < rows.length; i++) {
+      if (normalizeSymbol(rows[i] && rows[i].ticker) === "AL30") {
+        row = rows[i];
+        break;
+      }
+    }
+    if (!row) return null;
+    var last = finiteOrNull(row.close);
+    if (last == null) last = finiteOrNull(row.mark);
+    return quoteOrNull({
+      bid: finiteOrNull(row.bid),
+      ask: finiteOrNull(row.ask),
+      last: last
+    });
+  }
+
   function loadFxCloses() {
     var cache = getCache();
-    if (cache.fx && cache.fx.resolved) return Promise.resolve(cache.fx);
+    if (fxUseful(cache.fx)) return Promise.resolve(cache.fx);
     return Promise.all(["AL30", "AL30D", "AL30C"].map(function (symbol) {
       return fetchHistory("bonds", symbol);
     })).then(function (series) {
@@ -265,8 +299,10 @@
         mep: latestShared(al30, al30d),
         ccl: latestShared(al30, al30c)
       };
-      getCache().fx = fx;
-      saveCache();
+      if (fxUseful(fx)) {
+        getCache().fx = fx;
+        saveCache();
+      }
       return fx;
     }).catch(function () {
       return { resolved: false, mep: null, ccl: null };
@@ -277,23 +313,44 @@
    * MEP y CCL de referencia AL30.
    * live: último y puntas de hoy (con demora). close: histórico, una vez por día.
    */
-  function loadExchangeRates() {
+  function indexBySymbol(rows) {
+    var by = {};
+    rows.forEach(function (row) {
+      var symbol = normalizeSymbol(row && row.symbol);
+      if (symbol && by[symbol] == null) by[symbol] = row;
+    });
+    return by;
+  }
+
+  function loadExchangeRatesOnce() {
     return Promise.all([
-      fetchJson(BASE + "/live/arg_bonds").then(function (rows) { return Array.isArray(rows) ? rows : []; }),
+      fetchJson(BASE + "/live/arg_bonds").then(asList),
+      fetchJson(BASE + "/live/mep").then(asList),
       loadFxCloses()
     ]).then(function (pair) {
-      var by = {};
-      pair[0].forEach(function (row) {
-        var symbol = normalizeSymbol(row && row.symbol);
-        if (symbol && by[symbol] == null) by[symbol] = row;
-      });
-      var fx = pair[1] || {};
+      var by = indexBySymbol(pair[0]);
+      var fx = pair[2] || {};
       return {
-        mepLive: cross(by.AL30, by.AL30D),
-        cclLive: cross(by.AL30, by.AL30C),
+        mepLive: quoteOrNull(cross(by.AL30, by.AL30D)) || mepFromPanel(pair[1]),
+        cclLive: quoteOrNull(cross(by.AL30, by.AL30C)),
         mepClose: fx.mep || null,
         cclClose: fx.ccl || null
       };
+    });
+  }
+
+  function ratesHaveData(fx) {
+    if (!fx) return false;
+    function live(q) { return q && (q.bid != null || q.ask != null || q.last != null); }
+    return live(fx.mepLive) || live(fx.cclLive) || (fx.mepClose && fx.mepClose.close != null) || (fx.cclClose && fx.cclClose.close != null);
+  }
+
+  function loadExchangeRates() {
+    return loadExchangeRatesOnce().then(function (fx) {
+      if (ratesHaveData(fx)) return fx;
+      return new Promise(function (resolve) {
+        setTimeout(function () { resolve(loadExchangeRatesOnce()); }, 800);
+      });
     });
   }
 
