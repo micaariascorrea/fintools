@@ -374,16 +374,17 @@ body:not(.page-interna) .container {
   line-height: 1.45;
 }
 
-/* Etiqueta de categoría: texto plano, no parece un botón */
+/* Tag tipo pill --- */
 .card-tag {
   display: inline-block;
-  padding: 0;
+  padding: 0.25rem 0.65rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--text-secondary);
-  background: none;
-  border-radius: 0;
-  letter-spacing: 0.01em;
+  color: var(--tag-text);
+  background: var(--tag-bg);
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* --- Páginas internas: contenido placeholder --- */
