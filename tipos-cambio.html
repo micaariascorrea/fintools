@@ -7,12 +7,13 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
   <title>Tipos de cambio | ALLINARG</title>
-  <meta name="description" content="Dólar MEP y CCL al último cierre, con fuente, horario y aviso si el dato tiene más de un día.">
+  <meta name="description" content="Dólar MEP y CCL. Último operado con demora y cierre del día hábil anterior, con AL30 como referencia.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="page-interna">
-  <div class="ticker-wrap" aria-label="Precios de mercado">
+  <div class="ticker-wrap ticker-wrap-delayed" aria-label="Último operado con demora">
     <div id="ticker-bar" class="ticker-bar"></div>
+    <p class="ticker-delay">Último operado con demora (Data912, caché de unas 2 horas).</p>
   </div>
   <div class="container">
     <div class="page-header-row">
@@ -28,7 +29,7 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Tipos de cambio</h2>
-        <p class="tool-desc">Dólar MEP y CCL. La columna Cierre es el último cierre de rueda.</p>
+        <p class="tool-desc">Dólar MEP y CCL, con AL30 de referencia. Bid, ask y último son de hoy y vienen con demora. El cierre es el del día hábil anterior y no cambia durante la rueda.</p>
         <p id="tc-source" class="market-source" hidden></p>
         <p id="tc-stale" class="market-stale" hidden></p>
 
@@ -46,7 +47,8 @@
                   <th>Tipo</th>
                   <th>Bid</th>
                   <th>Ask</th>
-                  <th>Cierre</th>
+                  <th>Último</th>
+                  <th id="tc-close-head">Cierre</th>
                 </tr>
               </thead>
               <tbody id="tc-body"></tbody>
@@ -64,10 +66,10 @@
     </footer>
   </div>
 
+  <script src="assets/js/data912-prices.js"></script>
   <script>
     (function () {
       "use strict";
-      var BASE = "https://data912.com";
       function $(id) { return document.getElementById(id); }
 
       function format(n) {
@@ -90,10 +92,10 @@
         return y + "-" + m + "-" + d;
       }
 
-      function formatCierre(ymd) {
+      function formatDia(ymd) {
         var bits = ymd.split("-");
         if (bits.length !== 3) return ymd;
-        return bits[2] + "/" + bits[1] + " 17:00";
+        return bits[2] + "/" + bits[1];
       }
 
       function parseUtc(ymdStr) {
@@ -199,26 +201,6 @@
         return closeDate < previousBusinessDay(today);
       }
 
-      function fetchJson(url) {
-        return fetch(url).then(function (r) {
-          if (!r.ok) throw new Error("Data912 respondió " + r.status);
-          return r.json();
-        });
-      }
-
-      function lastCloseDate() {
-        return fetchJson(BASE + "/historical/bonds/AL30").then(function (arr) {
-          if (!Array.isArray(arr)) return null;
-          var today = todayYmd();
-          var best = null;
-          arr.forEach(function (row) {
-            if (!row || !row.date || row.date >= today) return;
-            if (best == null || row.date > best) best = row.date;
-          });
-          return best;
-        }).catch(function () { return null; });
-      }
-
       function showError(message) {
         $("mensaje").textContent = message;
         $("mensaje").className = "result-block error";
@@ -238,40 +220,49 @@
         $("tc-source").hidden = true;
         $("tc-stale").hidden = true;
 
-        Promise.all([
-          fetchJson(BASE + "/live/mep"),
-          fetchJson(BASE + "/live/ccl"),
-          lastCloseDate()
-        ]).then(function (results) {
-          var mep = Array.isArray(results[0]) ? results[0] : [];
-          var ccl = Array.isArray(results[1]) ? results[1] : [];
-          var closeDate = results[2];
-          var mepRow = mep.length ? mep[0] : null;
-          var cclRow = ccl.length ? ccl[0] : null;
+        if (!window.Data912Prices || typeof window.Data912Prices.loadExchangeRates !== "function") {
+          showError("No se pudo cargar el módulo de precios Data912.");
+          return;
+        }
 
+        window.Data912Prices.loadExchangeRates().then(function (fx) {
+          var mepLive = fx.mepLive;
+          var cclLive = fx.cclLive;
+          function hasLive(q) {
+            return q && (q.bid != null || q.ask != null || q.last != null);
+          }
           var rows = [];
-          if (mepRow && (mepRow.mark != null || mepRow.close != null)) {
-            rows.push({ tipo: "Dólar MEP", bid: mepRow.bid, ask: mepRow.ask, close: mepRow.close });
+          if (hasLive(mepLive) || (fx.mepClose && fx.mepClose.close != null)) {
+            rows.push({ tipo: "Dólar MEP", live: mepLive, close: fx.mepClose });
           }
-          if (cclRow && (cclRow.CCL_mark != null || cclRow.CCL_close != null)) {
-            rows.push({ tipo: "Dólar CCL", bid: cclRow.CCL_bid, ask: cclRow.CCL_ask, close: cclRow.CCL_close });
+          if (hasLive(cclLive) || (fx.cclClose && fx.cclClose.close != null)) {
+            rows.push({ tipo: "Dólar CCL", live: cclLive, close: fx.cclClose });
           }
-
           if (!rows.length) {
             showError("Data912 no devolvió MEP ni CCL. Probá de nuevo en unos segundos.");
             return;
           }
 
+          var closeDates = [];
+          rows.forEach(function (r) {
+            if (r.close && r.close.date && closeDates.indexOf(r.close.date) < 0) closeDates.push(r.close.date);
+          });
+          closeDates.sort();
+          var sameDay = closeDates.length === 1 ? formatDia(closeDates[0]) : null;
+          $("tc-close-head").textContent = sameDay ? ("Cierre " + sameDay) : "Cierre";
+
           var source = $("tc-source");
-          if (closeDate) {
-            source.textContent = "Fuente: Data912 · Cierre del " + formatCierre(closeDate) + ". Bid y ask son la punta que publica Data912 al consultar; la columna Cierre es el último cierre de rueda BYMA (17:00).";
-          } else {
-            source.textContent = "Fuente: Data912 · la API no informó la fecha de cierre.";
-          }
+          source.textContent = "Fuente: Data912 · MEP = AL30/AL30D · CCL = AL30/AL30C. Último: con demora (caché de unas 2 horas, no es tiempo real). "
+            + (sameDay
+              ? "Cierre " + sameDay + ": histórico diario de esa rueda. No se vuelve a consultar hasta el día siguiente."
+              : (closeDates.length
+                ? "Cierre: histórico diario. No se vuelve a consultar hasta el día siguiente."
+                : "No se pudo leer el cierre histórico."));
           source.hidden = false;
 
+          var oldest = closeDates.length ? closeDates[0] : null;
           var stale = $("tc-stale");
-          if (closeDate && closeIsStale(closeDate, todayYmd())) {
+          if (oldest && closeIsStale(oldest, todayYmd())) {
             stale.textContent = "Este cierre tiene más de un día hábil.";
             stale.hidden = false;
           } else {
@@ -285,8 +276,14 @@
           var tbody = $("tc-body");
           tbody.innerHTML = "";
           rows.forEach(function (r) {
+            var live = r.live || {};
+            var closeText = "—";
+            if (r.close && r.close.close != null) {
+              closeText = "$ " + format(r.close.close);
+              if (!sameDay && r.close.date) closeText += " (" + formatDia(r.close.date) + ")";
+            }
             var tr = document.createElement("tr");
-            tr.innerHTML = "<td>" + r.tipo + "</td><td>$ " + format(r.bid) + "</td><td>$ " + format(r.ask) + "</td><td>$ " + format(r.close) + "</td>";
+            tr.innerHTML = "<td>" + r.tipo + "</td><td>$ " + format(live.bid) + "</td><td>$ " + format(live.ask) + "</td><td>$ " + format(live.last) + "</td><td>" + closeText + "</td>";
             tbody.appendChild(tr);
           });
         }).catch(function () {

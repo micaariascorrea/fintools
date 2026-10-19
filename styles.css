@@ -21,7 +21,7 @@
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
 }
 
-/* --- Ticker tipo Bloomberg (precios en vivo) --- */
+/* --- Ticker (último operado, con demora) --- */
 .ticker-wrap {
   position: fixed;
   top: 0;
@@ -115,7 +115,7 @@ body.has-ticker { padding-top: 36px; }
   text-align: right;
 }
 
-body.has-ticker:has(.ticker-wrap-delayed) { padding-top: 52px; }
+body.has-ticker:has(.ticker-wrap-delayed) { padding-top: 64px; }
 
 /* --- Reset básico --- */
 *, *::before, *::after {

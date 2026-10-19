@@ -12,8 +12,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body class="page-interna">
-  <div class="ticker-wrap" aria-label="Precios de mercado">
+  <div class="ticker-wrap ticker-wrap-delayed" aria-label="Último operado con demora">
     <div id="ticker-bar" class="ticker-bar"></div>
+    <p class="ticker-delay">Último operado con demora (Data912, caché de unas 2 horas).</p>
   </div>
   <div class="container">
     <div class="page-header-row">
@@ -29,7 +30,7 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Carry Trade</h2>
-        <p class="tool-desc">Rendimiento estimado de mantener activos en ARS hasta vencimiento y convertir a MEP.</p>
+        <p class="tool-desc">Rendimiento estimado de mantener activos en ARS hasta vencimiento y convertir a MEP. Los precios y el MEP son el último operado, con demora (Data912, caché de unas 2 horas).</p>
 
         <div class="carry-actions">
           <button type="button" id="btn-actualizar">Actualizar datos</button>
@@ -135,16 +136,21 @@
         wrap.style.display = "none";
 
         Promise.all([
-          fetch(BASE + "/live/mep").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
           fetch(BASE + "/live/arg_bonds").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; }),
           fetch(BASE + "/live/arg_notes").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
         ]).then(function (results) {
-          var mepArr = results[0];
-          var bonds = results[1] || [];
-          var notes = results[2] || [];
+          var bonds = results[0] || [];
+          var notes = results[1] || [];
 
-          var mepMark = null;
-          if (mepArr && mepArr.length && mepArr[0].mark != null) mepMark = mepArr[0].mark;
+          function bondBySymbol(symbol) {
+            for (var i = 0; i < bonds.length; i++) {
+              if ((bonds[i].symbol || "") === symbol) return bonds[i];
+            }
+            return null;
+          }
+          var al30 = bondBySymbol("AL30");
+          var al30d = bondBySymbol("AL30D");
+          var mepMark = (al30 && al30d && al30.c && al30d.c) ? al30.c / al30d.c : null;
 
           var all = [];
           bonds.forEach(function (b) {
@@ -197,12 +203,12 @@
             return;
           }
 
-          mepEl.textContent = mepMark != null ? "MEP actual: $" + formatNum(mepMark, 2) : "";
+          mepEl.textContent = mepMark != null ? "MEP último (con demora): $ " + mepMark.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "MEP último (con demora): sin dato";
           msg.style.display = "none";
           wrap.style.display = "block";
 
           var mepUtilizado = $("mep-utilizado");
-          if (mepUtilizado) mepUtilizado.textContent = mepMark != null ? "MEP Actual utilizado para los cálculos: $" + formatNum(mepMark, 2) : "";
+          if (mepUtilizado) mepUtilizado.textContent = mepMark != null ? "MEP último utilizado para los cálculos (con demora): $ " + mepMark.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
           var inputMep = $("mep-personalizado");
           if (inputMep) {
             inputMep.value = mepMark != null ? String(Math.round(mepMark)) : "";

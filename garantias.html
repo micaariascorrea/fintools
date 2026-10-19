@@ -31,8 +31,9 @@
   </style>
 </head>
 <body class="page-interna">
-  <div class="ticker-wrap" aria-label="Precios de mercado">
+  <div class="ticker-wrap ticker-wrap-delayed" aria-label="Último operado con demora">
     <div id="ticker-bar" class="ticker-bar"></div>
+    <p class="ticker-delay">Último operado con demora (Data912, caché de unas 2 horas).</p>
   </div>
   <div class="container">
     <div class="page-header-row">
@@ -48,7 +49,7 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Calculadora de garantías</h2>
-        <p class="tool-desc">Simulá si tu cartera alcanza para garantizar una caución. Los precios se toman del cierre del último día hábil (misma API Data912 que el ticker). Elegí el mercado y cargá el portfolio (masiva o manual).</p>
+        <p class="tool-desc">Simulá si tu cartera alcanza para garantizar una caución. Los precios son el cierre del día hábil anterior (Data912, histórico diario), no el último operado de hoy. Elegí el mercado y cargá el portfolio (masiva o manual).</p>
         <p class="tool-desc">El archivo de cartera y la lista de garantías se leen en el navegador y no se envían a ningún servidor. En BYMA, los aforos son los del archivo que subís: la fecha es la de esa lista. En A3, la lista incluida está actualizada al 12/10/2026, salvo que cargues una más nueva.</p>
 
         <form id="form-garantias" novalidate action="javascript:void(0);">
@@ -660,7 +661,7 @@
           tableWrap.style.display = "none";
           return;
         }
-        if (!window.Data912Prices || typeof window.Data912Prices.loadPriorBusinessDayCloses !== "function") {
+        if (!window.Data912Prices || typeof window.Data912Prices.loadPriorCloses !== "function") {
           resultadoEl.textContent = "No se pudo cargar el módulo de precios Data912.";
           resultadoEl.classList.add("error");
           resultadoEl.style.display = "block";
@@ -668,7 +669,7 @@
           return;
         }
 
-        resultadoEl.textContent = "Cargando precios (cierre último día hábil, Data912)…";
+        resultadoEl.textContent = "Cargando el cierre del día hábil anterior (Data912)…";
         resultadoEl.classList.remove("error", "has-result");
         resultadoEl.classList.add("empty");
         resultadoEl.style.display = "block";
@@ -687,48 +688,84 @@
               return;
             }
 
-            window.Data912Prices.loadPriorBusinessDayCloses().then(function (pricePack) {
+            var lookup = buildGarantiasLookup(garPack, moneda);
+            var aforoDict = lookup.aforoDict;
+            var cupoDict = lookup.cupoDict;
+            var especieDict = lookup.especieDict;
+            var listaDict = lookup.listaDict;
+            var especieToCod = lookup.especieToCod;
+
+            var carCols = car.headers;
+            var tickerCol = findOptionalCol(carCols, ["Ticker", "Símbolo", "Simbolo", "Symbol"]);
+            var cvsaCol = findOptionalCol(carCols, ["Código CVSA", "Codigo CVSA", "Cod CVSA", "Cód CVSA", "Cod. CVSA", "Cód. CVSA"]);
+            var idCol = null;
+            if (!tickerCol && !cvsaCol) {
+              idCol = findCol(carCols, ["Código CVSA", "Codigo CVSA", "Código", "Cod", "Ticker", "Ticker "], 0, true, "Mi cartera");
+            }
+            var cantCol = findCol(carCols, ["Cantidad", "Valores Nominales", "VN", "Cantidad VN", "Valores nominales"], tickerCol && cvsaCol ? 2 : 1, true, "Mi cartera");
+
+            function kindsForLista(lista) {
+              var s = String(lista || "");
+              if (s.indexOf("Acciones") === 0) return ["stocks", "cedears", "bonds"];
+              if (s.indexOf("CEDEAR") === 0) return ["cedears", "stocks", "bonds"];
+              return ["bonds", "stocks", "cedears"];
+            }
+
+            var lines = [];
+            var jobsMap = {};
+            function addJob(symbol, kinds) {
+              var key = String(symbol || "").trim().toUpperCase();
+              if (!key || jobsMap[key]) return;
+              jobsMap[key] = { symbol: key, kinds: kinds };
+            }
+            for (var ri0 = 0; ri0 < car.rows.length; ri0++) {
+              var row0 = car.rows[ri0];
+              var vn0 = parseFloat(String(row0[cantCol] || "").replace(/\./g, "").replace(",", "."));
+              if (isNaN(vn0) || vn0 <= 0) continue;
+              var ident0 = resolveCarteraIdentity(row0, tickerCol, cvsaCol, idCol, especieToCod);
+              if (!ident0.ticker && ident0.cod == null) continue;
+              var lista0 = ident0.cod != null ? String(listaDict[ident0.cod] || "") : "";
+              var kinds0 = kindsForLista(lista0);
+              if (ident0.ticker) addJob(ident0.ticker, kinds0);
+              if (ident0.cod != null) addJob(especieDict[ident0.cod], kinds0);
+              lines.push({ vn: vn0, ticker: ident0.ticker, cod: ident0.cod });
+            }
+
+            var jobs = [];
+            for (var jobKey in jobsMap) {
+              if (Object.prototype.hasOwnProperty.call(jobsMap, jobKey)) jobs.push(jobsMap[jobKey]);
+            }
+
+            window.Data912Prices.loadPriorCloses(jobs).then(function (pricePack) {
               try {
                 var priceMap = pricePack.prices || {};
+                var priceDates = pricePack.dates || {};
                 if (!Object.keys(priceMap).length) {
-                  throw new Error("No se obtuvieron precios desde Data912. Reintentá en unos segundos.");
+                  throw new Error("Data912 no tiene el cierre histórico del día hábil anterior para estas especies. Reintentá en unos segundos.");
                 }
-
-                var lookup = buildGarantiasLookup(garPack, moneda);
-                var aforoDict = lookup.aforoDict;
-                var cupoDict = lookup.cupoDict;
-                var especieDict = lookup.especieDict;
-                var listaDict = lookup.listaDict;
-                var especieToCod = lookup.especieToCod;
-
-                var carCols = car.headers;
-                var tickerCol = findOptionalCol(carCols, ["Ticker", "Símbolo", "Simbolo", "Symbol"]);
-                var cvsaCol = findOptionalCol(carCols, ["Código CVSA", "Codigo CVSA", "Cod CVSA", "Cód CVSA", "Cod. CVSA", "Cód. CVSA"]);
-                var idCol = null;
-                if (!tickerCol && !cvsaCol) {
-                  idCol = findCol(carCols, ["Código CVSA", "Codigo CVSA", "Código", "Cod", "Ticker", "Ticker "], 0, true, "Mi cartera");
-                }
-                var cantCol = findCol(carCols, ["Cantidad", "Valores Nominales", "VN", "Cantidad VN", "Valores nominales"], tickerCol && cvsaCol ? 2 : 1, true, "Mi cartera");
 
                 var montoFinal = monto + monto * (tasa / 100) * (plazo / 365);
                 var simbolo = moneda === "USD" ? "USD" : "$";
                 var results = [];
                 var totalContrib = 0;
                 var skippedNoPrice = [];
+                var usedDates = {};
 
-                for (var ri = 0; ri < car.rows.length; ri++) {
-                  var r = car.rows[ri];
-                  var vn = parseFloat(String(r[cantCol] || "").replace(/\./g, "").replace(",", "."));
-                  if (isNaN(vn) || vn <= 0) continue;
-                  var ident = resolveCarteraIdentity(r, tickerCol, cvsaCol, idCol, especieToCod);
-                  var ticker = ident.ticker;
-                  var cod = ident.cod;
-                  if (!ticker && cod == null) continue;
+                for (var ri = 0; ri < lines.length; ri++) {
+                  var line = lines[ri];
+                  var vn = line.vn;
+                  var ticker = line.ticker;
+                  var cod = line.cod;
 
+                  var pricedAs = null;
                   var price = ticker ? window.Data912Prices.lookupPrice(priceMap, ticker) : null;
+                  if (price != null && !isNaN(price)) pricedAs = String(ticker).trim().toUpperCase();
                   if ((price == null || isNaN(price)) && cod != null) {
                     var espName = String(especieDict[cod] || "").trim().toUpperCase();
-                    if (espName) price = window.Data912Prices.lookupPrice(priceMap, espName);
+                    if (espName) {
+                      price = window.Data912Prices.lookupPrice(priceMap, espName);
+                      if (price != null && !isNaN(price)) pricedAs = espName;
+                    }
                     if ((price == null || isNaN(price)) && !ticker) ticker = espName || null;
                   }
                   if (price == null || isNaN(price)) {
@@ -740,6 +777,7 @@
                   if (garPack.format === "a3" && (aforoDict[cod] === undefined || aforoDict[cod] === null || aforoDict[cod] === "")) {
                     continue;
                   }
+                  if (pricedAs && priceDates[pricedAs]) usedDates[priceDates[pricedAs]] = true;
 
                   var lista = String(listaDict[cod] || "");
                   var isFixedIncome = lista.indexOf("Acciones") !== 0 && lista.indexOf("CEDEARS") !== 0;
@@ -788,9 +826,16 @@
 
                 var pctTotal = montoFinal > 0 ? (totalContrib / montoFinal) * 100 : 0;
                 var alcanza = totalContrib >= montoFinal;
-                var closeDateLabel = pricePack.closeDate
-                  ? ("Cierre " + pricePack.closeDate + " (último día hábil)")
-                  : "Cierre último día hábil (Data912 /live)";
+                var usedDateKeys = Object.keys(usedDates).sort();
+                function formatDiaCierre(ymd) {
+                  var bits = String(ymd || "").split("-");
+                  return bits.length === 3 ? bits[2] + "/" + bits[1] : ymd;
+                }
+                var closeDateLabel = usedDateKeys.length === 1
+                  ? ("Cierre del " + formatDiaCierre(usedDateKeys[0]) + " (día hábil anterior)")
+                  : (usedDateKeys.length > 1
+                    ? ("Cierre del día hábil anterior (del " + formatDiaCierre(usedDateKeys[0]) + " al " + formatDiaCierre(usedDateKeys[usedDateKeys.length - 1]) + ")")
+                    : "Cierre del día hábil anterior");
 
                 resultadoEl.classList.remove("empty", "error");
                 resultadoEl.classList.add("has-result");
@@ -799,12 +844,12 @@
 
                 var portfolioLabel = portfolioMode === "manual" ? "carga manual" : "carga masiva";
                 var tableHtml = "<p class=\"result-summary\">Mercado: " + escapeHtml(mercado) + " · " + escapeHtml(garPack.sourceLabel) + " · portfolio: " + portfolioLabel + "</p>";
-                tableHtml += "<p class=\"result-summary\">Precios: " + escapeHtml(closeDateLabel) + " · fuente Data912 (misma API que el ticker)</p>";
+                tableHtml += "<p class=\"result-summary\">Precios: " + escapeHtml(closeDateLabel) + " · Data912, histórico diario. No es el último operado de hoy.</p>";
                 tableHtml += "<p class=\"result-summary\">Monto inicial: " + simbolo + " " + formatoNumero(monto, 0) + " | Tasa: " + formatoNumero(tasa, 2) + "% | Plazo: " + plazo + " días</p>";
                 tableHtml += "<p class=\"result-summary\"><strong>Monto final (caución): " + simbolo + " " + formatoNumero(montoFinal, 2) + "</strong></p>";
                 tableHtml += "<p class=\"result-summary\">Total garantía calculada: " + simbolo + " " + formatoNumero(totalContrib, 2) + " | <strong>" + (alcanza ? "Sí alcanza (100% cubierto)" : "No alcanza (" + formatoNumero(pctTotal, 2) + "% cubierto)") + "</strong></p>";
                 if (skippedNoPrice.length) {
-                  tableHtml += "<p class=\"result-summary\">Sin precio Data912 (omitidas): " + escapeHtml(skippedNoPrice.slice(0, 12).join(", ")) + (skippedNoPrice.length > 12 ? "…" : "") + "</p>";
+                  tableHtml += "<p class=\"result-summary\">Sin cierre histórico del día hábil anterior (omitidas): " + escapeHtml(skippedNoPrice.slice(0, 12).join(", ")) + (skippedNoPrice.length > 12 ? "…" : "") + "</p>";
                 }
                 tableHtml += "<table class=\"result-table\"><thead><tr><th>Cód.</th><th>Especie</th><th>VN</th><th>Precio</th><th>Aforo %</th><th>Contribución " + moneda + "</th><th>% del monto final</th><th>VN usado</th><th>Monto usado " + moneda + "</th><th>VN libre</th></tr></thead><tbody>";
                 var copyLines = ["Cód.\tEspecie\tVN\tPrecio\tAforo %\tContribución " + moneda + "\t% del monto final\tVN usado\tMonto usado " + moneda + "\tVN libre"];
@@ -825,7 +870,8 @@
                   pctTotal: pctTotal,
                   moneda: moneda,
                   mercado: mercado,
-                  closeDate: pricePack.closeDate,
+                  closeDate: usedDateKeys[0] || null,
+                  closeDateLabel: closeDateLabel,
                   garantiasSource: garPack.sourceLabel
                 };
               } catch (err) {
@@ -937,6 +983,7 @@
           aoa.push(["Total garantía", meta.totalContrib]);
           aoa.push(["¿Alcanza?", meta.alcanza ? "Sí" : "No"]);
           aoa.push(["% cubierto", meta.pctTotal.toFixed(2) + "%"]);
+          if (meta.closeDateLabel) aoa.push(["Precios", meta.closeDateLabel + ". Histórico diario de Data912; no es el último operado de hoy."]);
         }
         var ws = XLSX.utils.aoa_to_sheet(aoa);
         var wb = XLSX.utils.book_new();
