@@ -29,7 +29,7 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Calculadora SENEBI – Cuadro completo</h2>
-        <p class="tool-desc">Cálculo de vn para operaciones de FX. Complete los datos y pulse Calcular.</p>
+        <p class="tool-desc">Cálculo de vn para operaciones de FX. Completá los datos y pulsá Calcular.</p>
 
         <form id="form-senebi" novalidate action="javascript:void(0);">
           <div class="form-grid">
@@ -65,7 +65,7 @@
               <input type="text" id="tc" name="tc" placeholder="Ej: 1.150" inputmode="decimal" autocomplete="off" required data-decimales="2">
             </div>
             <div class="form-group">
-              <label for="contraparte">CONTRAPARTE (Agente)</label>
+              <label for="contraparte">Contraparte (agente)</label>
               <input type="text" id="contraparte" name="contraparte" placeholder="Código numérico del agente" pattern="[0-9]+" required>
             </div>
             <div class="form-actions">
@@ -146,7 +146,7 @@
        */
       function calcularCuadro(formData) {
         var activoBase = (formData.activo || "").trim().toUpperCase();
-        if (!activoBase) throw new Error("Debe ingresar un activo base.");
+        if (!activoBase) throw new Error("Ingresá un activo base.");
 
         var plazo = formData.plazo;
         var monedaPata2 = formData.moneda_pata2;
@@ -156,7 +156,7 @@
         var contraparte = (formData.contraparte || "").trim();
 
         if (monedaPata2 === "Pesos") throw new Error("La Pata 2 debe ser MEP o Cable, no Pesos.");
-        if (!contraparte || !/^\d+$/.test(contraparte)) throw new Error("Debe ingresar un valor numérico válido para CONTRAPARTE.");
+        if (!contraparte || !/^\d+$/.test(contraparte)) throw new Error("Ingresá un código numérico de agente.");
 
         var activoPata1 = activoBase;
         var activoPata2 = monedaPata2 === "MEP" ? activoBase + "D" : activoBase + "C";
@@ -233,7 +233,8 @@
       ["monto-pata2", "precio-pata2", "tc"].forEach(function (id) {
         var input = document.getElementById(id);
         if (!input) return;
-        var decimales = parseInt(input.getAttribute("data-decimales"), 10) || 2;
+        var decRaw = parseInt(input.getAttribute("data-decimales"), 10);
+        var decimales = isNaN(decRaw) ? 2 : decRaw;
         input.addEventListener("blur", function () {
           var num = parseInputMonto(input.value);
           if (!isNaN(num) && input.value.trim() !== "") {
@@ -288,7 +289,7 @@
         var text = lastResultForClipboard || resultadoEl.textContent;
         if (!text || resultadoEl.classList.contains("empty")) {
           resultadoEl.classList.add("error");
-          resultadoEl.textContent = "No hay resultado para copiar. Calcule primero.";
+          resultadoEl.textContent = "No hay resultado para copiar. Calculá primero.";
           return;
         }
         var toCopy = lastResultForClipboard ? lastResultForClipboard : textForClipboard(text);

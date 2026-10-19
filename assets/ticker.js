@@ -11,8 +11,9 @@
 
   function formatPct(p) {
     if (p == null || isNaN(p)) return "";
-    var s = (p >= 0 ? "+" : "") + p.toFixed(2) + "%";
-    return s;
+    var abs = Math.abs(p).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    var sign = p > 0 ? "+" : p < 0 ? "-" : "";
+    return sign + abs + "%";
   }
 
   function buildItems(bonds, stocks, mepMark) {
@@ -52,12 +53,15 @@
       return;
     }
     var html = "";
+    var copy = "";
     items.forEach(function (it) {
       var pctClass = it.pct != null ? (it.pct >= 0 ? "positive" : "negative") : "";
       var pctStr = it.pct != null ? "<span class=\"ticker-pct " + pctClass + "\">" + formatPct(it.pct) + "</span>" : "";
-      html += "<span class=\"ticker-item\"><span class=\"ticker-symbol\">" + (it.label || it.symbol) + "</span><span class=\"ticker-price\">" + formatPrice(it.price) + "</span>" + pctStr + "</span>";
+      var item = "<span class=\"ticker-item\"><span class=\"ticker-symbol\">" + (it.label || it.symbol) + "</span><span class=\"ticker-price\">" + formatPrice(it.price) + "</span>" + pctStr + "</span>";
+      html += item;
+      copy += item.replace("class=\"ticker-item\"", "class=\"ticker-item\" aria-hidden=\"true\"");
     });
-    barEl.innerHTML = html + html;
+    barEl.innerHTML = html + copy;
   }
 
   function run() {

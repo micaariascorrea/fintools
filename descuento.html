@@ -188,7 +188,8 @@
       });
 
       [].forEach.call(form.querySelectorAll("#valor-nominal, #tasa"), function (input) {
-        var dec = parseInt(input.getAttribute("data-decimales"), 10) || 2;
+        var decRaw = parseInt(input.getAttribute("data-decimales"), 10);
+        var dec = isNaN(decRaw) ? 2 : decRaw;
         input.addEventListener("blur", function () {
           var num = parseNum(input.value);
           if (!isNaN(num) && input.value.trim() !== "") {
