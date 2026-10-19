@@ -48,7 +48,7 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Calculadora de garantías</h2>
-        <p class="tool-desc">Simula si tu cartera alcanza para garantizar una caución. Los precios se toman del cierre del último día hábil (misma API Data912 que el ticker). Elegí el mercado y cargá el portfolio (masiva o manual).</p>
+        <p class="tool-desc">Simulá si tu cartera alcanza para garantizar una caución. Los precios se toman del cierre del último día hábil (misma API Data912 que el ticker). Elegí el mercado y cargá el portfolio (masiva o manual).</p>
         <p class="tool-desc">El archivo de cartera y la lista de garantías se leen en el navegador y no se envían a ningún servidor. En BYMA, los aforos son los del archivo que subís: la fecha es la de esa lista. En A3, la lista incluida está actualizada al 12/10/2026, salvo que cargues una más nueva.</p>
 
         <form id="form-garantias" novalidate action="javascript:void(0);">
@@ -114,7 +114,7 @@
               <input type="text" id="monto" name="monto" placeholder="Ej: 1.000.000" inputmode="decimal" autocomplete="off" required data-decimales="2">
             </div>
             <div class="form-group">
-              <label for="tasa">Tasa (% anual)</label>
+              <label for="tasa">TNA (%) · base 365</label>
               <input type="text" id="tasa" name="tasa" placeholder="Ej: 25,5" inputmode="decimal" autocomplete="off" required data-decimales="2">
             </div>
             <div class="form-group">
@@ -888,7 +888,8 @@
       });
 
       [].forEach.call(document.querySelectorAll("#monto, #tasa, #plazo"), function (input) {
-        var dec = parseInt(input.getAttribute("data-decimales"), 10) || 2;
+        var decRaw = parseInt(input.getAttribute("data-decimales"), 10);
+        var dec = isNaN(decRaw) ? 2 : decRaw;
         input.addEventListener("blur", function () {
           var num = parseInputMonto(input.value);
           if (!isNaN(num) && input.value.trim() !== "") input.value = formatInputMonto(num, dec);

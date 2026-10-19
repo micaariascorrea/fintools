@@ -175,7 +175,8 @@
 
       // Inputs con formato: miles punto, decimales coma. Al salir (blur) formatear; al entrar (focus) valor crudo para editar.
       [form.monto, form.tasa, form.plazo, form.arancel].forEach(function (input) {
-        var decimales = parseInt(input.getAttribute("data-decimales"), 10) || 2;
+        var decRaw = parseInt(input.getAttribute("data-decimales"), 10);
+        var decimales = isNaN(decRaw) ? 2 : decRaw;
         input.addEventListener("blur", function () {
           var num = parseInputMonto(input.value);
           if (!isNaN(num) && input.value.trim() !== "") {
