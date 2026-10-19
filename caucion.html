@@ -6,7 +6,8 @@
   <link rel="icon" href="assets/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
-  <title>Calculadora de Caución | Financial Tools</title>
+  <title>Calculadora de caución | ALLINARG</title>
+  <meta name="description" content="Interés de una caución bursátil a TNA base 365, con punta colocadora o tomadora y neto después de arancel, derechos de mercado e IVA.">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="page-interna">
@@ -27,16 +28,17 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Calculadora de Caución</h2>
-        <p class="tool-desc">Cálculo de intereses. Tasa anual, plazo en días.</p>
+        <p class="tool-desc">Interés bruto y neto. El monto es el contado y la tasa es TNA con base 365.</p>
 
         <form id="form-caucion" novalidate action="javascript:void(0);">
           <div class="form-grid">
             <div class="form-group">
-              <label for="monto">Monto</label>
+              <label for="monto">Monto contado</label>
               <input type="text" id="monto" name="monto" placeholder="Ej: 100.000" inputmode="decimal" autocomplete="off" required data-decimales="2">
+              <span class="form-hint">Capital al inicio. El monto a término se calcula al vencimiento.</span>
             </div>
             <div class="form-group">
-              <label for="tasa">Tasa (% anual)</label>
+              <label for="tasa">TNA (%) · base 365</label>
               <input type="text" id="tasa" name="tasa" placeholder="Ej: 25,5" inputmode="decimal" autocomplete="off" required data-decimales="2">
             </div>
             <div class="form-group">
@@ -49,6 +51,18 @@
                 <option value="pesos">Pesos</option>
                 <option value="dolar">Dólar</option>
               </select>
+            </div>
+            <div class="form-group form-span">
+              <span class="field-label">Punta</span>
+              <div class="choice-group">
+                <label class="choice"><input type="radio" name="punta" value="colocadora" checked> Colocadora</label>
+                <label class="choice"><input type="radio" name="punta" value="tomadora"> Tomadora</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="arancel">Arancel ALYC (TNA %, base 365)</label>
+              <input type="text" id="arancel" name="arancel" value="0" inputmode="decimal" autocomplete="off" data-decimales="2">
+              <span class="form-hint">Lo define cada agente. El supuesto inicial es 0%.</span>
             </div>
             <div class="form-actions">
               <button type="button" id="btn-calcular">Calcular</button>
@@ -71,6 +85,7 @@
         <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
         <span>LinkedIn: <a href="https://www.linkedin.com/in/micaelaariasc/" target="_blank" rel="noopener">micaelaariasc</a></span>
       </div>
+      <p class="footer-disclaimer">Cálculos estimativos, no constituyen recomendación de inversión.</p>
     </footer>
   </div>
 
@@ -110,22 +125,46 @@
       }
 
       /**
-       * Calcula intereses (tasa anual, plazo en días) y monto final.
-       * Fórmula: Intereses = monto * (tasa/100) * (plazo/365)
+       * Caución BYMA.
+       * Interés y arancel: TNA base 365 sobre el monto contado.
+       * Derecho de mercado: 0,045% sobre el contado, prorrateado a 90 días (tope 90).
+       * IVA 21% sobre arancel y derecho. No incluye impuesto al cheque ni mínimos.
        */
-      function calcularCaucion(monto, tasa, plazo, moneda) {
+      var DERECHO_TASA = 0.00045;
+      var DERECHO_BASE_DIAS = 90;
+      var IVA = 0.21;
+
+      function calcularCaucion(monto, tasa, plazo, moneda, punta, arancelTna) {
         if (monto <= 0 || plazo <= 0) {
           throw new Error("Monto y plazo deben ser mayores a cero.");
         }
-        var intereses = monto * (tasa / 100) * (plazo / 365);
-        var montoFinal = monto + intereses;
+        if (tasa < 0 || arancelTna < 0) {
+          throw new Error("La TNA y el arancel no pueden ser negativos.");
+        }
+        var interes = monto * (tasa / 100) * (plazo / 365);
+        var arancel = monto * (arancelTna / 100) * (plazo / 365);
+        var diasDerecho = Math.min(plazo, DERECHO_BASE_DIAS);
+        var derecho = monto * DERECHO_TASA * (diasDerecho / DERECHO_BASE_DIAS);
+        var iva = (arancel + derecho) * IVA;
+        var costos = arancel + derecho + iva;
+        var bruto = monto + interes;
+        var colocadora = punta !== "tomadora";
+        var neto = colocadora ? bruto - costos : bruto + costos;
+        var tnaNeta = monto > 0 ? ((neto - monto) / monto) * (365 / plazo) * 100 : 0;
         var simbolo = moneda === "dolar" ? "USD" : "$";
         return {
-          intereses: intereses,
-          montoFinal: montoFinal,
-          moneda: moneda,
+          interes: interes,
+          arancel: arancel,
+          derecho: derecho,
+          iva: iva,
+          costos: costos,
+          bruto: bruto,
+          neto: neto,
+          tnaNeta: tnaNeta,
+          colocadora: colocadora,
           simbolo: simbolo,
-          monedaLabel: moneda === "dolar" ? "Dólar" : "Pesos"
+          monedaLabel: moneda === "dolar" ? "Dólar" : "Pesos",
+          arancelTna: arancelTna
         };
       }
 
@@ -135,7 +174,7 @@
       var btnCalcular = document.getElementById("btn-calcular");
 
       // Inputs con formato: miles punto, decimales coma. Al salir (blur) formatear; al entrar (focus) valor crudo para editar.
-      [form.monto, form.tasa, form.plazo].forEach(function (input) {
+      [form.monto, form.tasa, form.plazo, form.arancel].forEach(function (input) {
         var decimales = parseInt(input.getAttribute("data-decimales"), 10) || 2;
         input.addEventListener("blur", function () {
           var num = parseInputMonto(input.value);
@@ -156,26 +195,69 @@
         });
       });
 
+      function linea(label, valor) {
+        var pad = label;
+        while (pad.length < 24) pad += " ";
+        return pad + valor;
+      }
+
       function ejecutarCalculo() {
         var monto = parseInputMonto(form.monto.value) || 0;
         var tasa = parseInputMonto(form.tasa.value) || 0;
         var plazo = parseInt(String(Math.round(parseInputMonto(form.plazo.value) || 0)), 10) || 0;
+        var arancelTna = parseInputMonto(form.arancel.value);
+        if (isNaN(arancelTna)) arancelTna = 0;
         var moneda = form.moneda.value;
+        var puntaInput = form.querySelector('input[name="punta"]:checked');
+        var punta = puntaInput ? puntaInput.value : "colocadora";
 
         try {
-          var r = calcularCaucion(monto, tasa, plazo, moneda);
+          var r = calcularCaucion(monto, tasa, plazo, moneda, punta, arancelTna);
+          var netoLabel = r.colocadora ? "Neto a cobrar al vencimiento" : "Neto a pagar al vencimiento";
+          var tnaLabel = r.colocadora ? "TNA neta · base 365" : "Costo neto (TNA · base 365)";
+          var puntaLabel = r.colocadora ? "Colocadora" : "Tomadora";
+          var money = function (n) { return r.simbolo + " " + formatoMonto(n, 2); };
           var texto =
-            "Moneda: " + r.monedaLabel + "\n\n" +
-            "Monto inicial: " + r.simbolo + " " + formatoMonto(monto, 0) + "\n" +
-            "Intereses:     " + r.simbolo + " " + formatoMonto(r.intereses, 2) + "\n" +
-            "Monto final:   " + r.simbolo + " " + formatoMonto(r.montoFinal, 2);
+            puntaLabel + " · " + r.monedaLabel + "\n" +
+            netoLabel + ": " + money(r.neto) + "\n" +
+            tnaLabel + ": " + formatoMonto(r.tnaNeta, 2) + "%\n\n" +
+            linea("Monto contado", money(monto)) + "\n" +
+            linea("Interés bruto", money(r.interes)) + "\n" +
+            linea("Arancel ALYC", money(r.arancel)) + "\n" +
+            linea("Derecho de mercado", money(r.derecho)) + "\n" +
+            linea("IVA 21%", money(r.iva)) + "\n" +
+            linea("Costos", money(r.costos)) + "\n" +
+            linea("Monto a término bruto", money(r.bruto));
 
-          resultadoEl.textContent = texto;
+          resultadoEl.innerHTML =
+            '<p class="result-neto-label">' + netoLabel + "</p>" +
+            '<p class="result-neto-value">' + money(r.neto) + "</p>" +
+            '<p class="result-neto-sub">' + tnaLabel + ": " + formatoMonto(r.tnaNeta, 2) + "%</p>" +
+            '<details class="supuestos"><summary>Supuestos</summary>' +
+            "<p>TNA " + formatoMonto(tasa, 2) + "% · base 365 · plazo " + plazo + " días · punta " + puntaLabel.toLowerCase() + ".</p>" +
+            "<ul>" +
+            "<li>Interés bruto = monto contado × TNA × plazo / 365.</li>" +
+            "<li>Arancel ALYC: TNA " + formatoMonto(r.arancelTna, 2) + "% · base 365 sobre el contado. Lo define cada agente.</li>" +
+            "<li>Derecho de mercado BYMA: 0,045% sobre el contado, prorrateado a 90 días (no crece después del día 90).</li>" +
+            "<li>IVA 21% sobre arancel y derecho de mercado.</li>" +
+            "<li>No incluye impuesto a los débitos y créditos ni mínimos de arancel.</li>" +
+            "</ul>" +
+            '<p class="result-lines">' +
+            linea("Monto contado", money(monto)) + "\n" +
+            linea("Interés bruto", money(r.interes)) + "\n" +
+            linea("Arancel ALYC", money(r.arancel)) + "\n" +
+            linea("Derecho de mercado", money(r.derecho)) + "\n" +
+            linea("IVA 21%", money(r.iva)) + "\n" +
+            linea("Costos", money(r.costos)) + "\n" +
+            linea("Monto a término bruto", money(r.bruto)) +
+            "</p></details>";
+          resultadoEl.dataset.copy = texto;
           resultadoEl.classList.remove("empty", "error");
-          resultadoEl.classList.add("has-result");
+          resultadoEl.classList.add("has-result", "result-rich");
         } catch (err) {
           resultadoEl.textContent = err.message;
-          resultadoEl.classList.remove("empty", "has-result");
+          delete resultadoEl.dataset.copy;
+          resultadoEl.classList.remove("empty", "has-result", "result-rich");
           resultadoEl.classList.add("error");
         }
       }
@@ -187,7 +269,7 @@
       });
 
       btnCopiar.addEventListener("click", function () {
-        var text = resultadoEl.textContent.trim();
+        var text = (resultadoEl.dataset.copy || resultadoEl.textContent || "").trim();
         if (!text || resultadoEl.classList.contains("empty")) {
           resultadoEl.classList.add("error");
           resultadoEl.textContent = "No hay resultado para copiar. Calcule primero.";

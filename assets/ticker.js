@@ -48,7 +48,7 @@
 
   function render(barEl, items) {
     if (!items.length) {
-      barEl.innerHTML = "<span class=\"ticker-item\"><span class=\"ticker-symbol\">Cargando…</span></span>";
+      barEl.innerHTML = "<span class=\"ticker-item\"><span class=\"ticker-symbol\">Sin datos de mercado</span></span>";
       return;
     }
     var html = "";
@@ -79,6 +79,8 @@
     ]).then(function (results) {
       var mepMark = (results[2] && results[2][0] && results[2][0].mark != null) ? results[2][0].mark : null;
       done(results[0], results[1], mepMark);
+    }).catch(function () {
+      barEl.innerHTML = "<span class=\"ticker-item\"><span class=\"ticker-symbol\">Sin datos de mercado</span></span>";
     });
   }
 
