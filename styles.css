@@ -160,22 +160,51 @@ body:not(.page-interna) .container {
 
 .site-header-home .site-header-inner {
   flex: 1;
+  min-width: 0;
 }
 
-.site-header-home .site-header-inner .subtitle {
-  margin-top: 0.2rem;
+.site-logo {
+  margin: 0;
+  line-height: 0;
 }
 
-.site-header-home .header-flag {
-  position: static;
+.site-logo img {
+  display: block;
+  width: auto;
+  height: 56px;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.site-header:not(.site-header-home) .site-logo img {
+  height: 52px;
+  margin-inline: auto;
+  object-position: center;
+}
+
+.header-marks {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  line-height: 0;
+}
+
+.header-logo-mark {
+  display: block;
+  height: 34px;
+  width: auto;
+}
+
+.site-header-home .header-marks {
   flex-shrink: 0;
   margin-left: 1rem;
 }
 
-/* Bandera Argentina (solo visual, arriba a la derecha en internas) --- */
-.site-header:not(.site-header-home) .header-flag {
+/* Isotipo + bandera argentina, arriba a la derecha en internas */
+.site-header:not(.site-header-home) .header-marks {
   position: absolute;
-  top: 0.75rem;
+  top: 0.65rem;
   right: 0;
 }
 
@@ -863,6 +892,45 @@ input[type="file"] {
     padding: 1.5rem 0.5rem 1rem;
   }
 
+  .site-logo img,
+  .site-header:not(.site-header-home) .site-logo img {
+    height: 40px;
+    margin: 0;
+    object-position: left center;
+  }
+
+  .header-logo-mark {
+    height: 30px;
+  }
+
+  .site-header:not(.site-header-home) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    text-align: left;
+    padding: 0.85rem 0 1rem;
+  }
+
+  .site-header:not(.site-header-home) .header-marks {
+    position: static;
+    flex-shrink: 0;
+  }
+
+  .site-header:not(.site-header-home) .site-logo {
+    min-width: 0;
+  }
+
+  .page-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .page-header-row .site-header {
+    width: 100%;
+  }
+
   .site-header h1 {
     font-size: 1.5rem;
   }
@@ -945,6 +1013,19 @@ input[type="file"] {
   .container {
     padding: 0.75rem;
     padding-bottom: 5rem;
+  }
+
+  .site-logo img,
+  .site-header:not(.site-header-home) .site-logo img {
+    height: 34px;
+  }
+
+  .header-marks {
+    gap: 0.4rem;
+  }
+
+  .header-logo-mark {
+    height: 26px;
   }
 
   .site-header h1 {
