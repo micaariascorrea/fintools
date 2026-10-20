@@ -691,7 +691,9 @@
     cfg.ownAccounts = parseOwnAccounts($("comitentes") ? $("comitentes").value : "");
     cfg.tolerancia = 0;
     cfg.a3SoloPropia = true;
-    cfg.equivalencias = readEquivalencias();
+    var uiEquiv = readEquivalencias();
+    var defaults = CP.defaultConfig().equivalencias;
+    cfg.equivalencias = Object.assign({}, defaults, uiEquiv);
     return cfg;
   }
 
@@ -970,7 +972,7 @@
           ssCell({ value: "A3", style: "sA3", mergeAcross: 3 }),
           ssCell({ value: "NETO VN", style: "sNeto", mergeAcross: 3 }),
           ssCell({ value: "FLUJO $", style: "sFlujo", mergeAcross: 1 }),
-          ssCell({ value: "Estado", style: "sHead", mergeDown: 1 })])
+          ssCell({ value: "Estado", style: "sHead", mergeDown: 1 })
         ]
       )
     );
@@ -1137,6 +1139,14 @@
   }
 
   function run() {
+    try {
+      runInner();
+    } catch (err) {
+      setStatus(err.message || String(err), "error");
+    }
+  }
+
+  function runInner() {
     var cfg = readConfig();
     if (!cfg.agent) {
       setStatus("Indicá el nro. de agente propio (BYMA).", "error");
@@ -1203,7 +1213,10 @@
   }
 
   function initEquiv() {
-    var def = CP.defaultConfig().equivalencias;
+    var def = (CP && CP.defaultConfig && CP.defaultConfig().equivalencias) || {
+      TXS7X: "TZXS7",
+      S2N6X: "S13N6"
+    };
     Object.keys(def).forEach(function (k) {
       addEquivRow(k, def[k]);
     });
@@ -1213,8 +1226,7 @@
     });
   }
 
-  function init() {
-    initEquiv();
+  function bindActions() {
     var btn = $("btn-procesar");
     if (btn) btn.addEventListener("click", run);
     var form = $("form-control-posiciones");
@@ -1228,6 +1240,16 @@
     if (btnCopy) btnCopy.addEventListener("click", copyTable);
     var btnExcel = $("btn-exportar-excel");
     if (btnExcel) btnExcel.addEventListener("click", exportExcel);
+  }
+
+  function init() {
+    bindActions();
+    try {
+      if (!CP) throw new Error("No se pudo cargar el motor de control de posiciones.");
+      initEquiv();
+    } catch (err) {
+      setStatus(err.message || String(err), "error");
+    }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
