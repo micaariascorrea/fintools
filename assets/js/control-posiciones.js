@@ -798,8 +798,8 @@
       '<table class="dash-table" aria-label="Dashboard de posiciones">' +
       "<thead>" +
       "<tr>" +
-      '<th class="g-plain col-sticky col-num" rowspan="2">#</th>' +
-      '<th class="g-plain col-sticky col-ticker txt" rowspan="2">Ticker</th>' +
+      '<th class="g-plain col-num" rowspan="2">#</th>' +
+      '<th class="g-plain col-ticker txt" rowspan="2">Ticker</th>' +
       '<th class="g-senebi" colspan="4">BYMA · SENEBI</th>' +
       '<th class="g-pant" colspan="4">BYMA · PANTALLA</th>' +
       '<th class="g-a3" colspan="4">A3</th>' +
@@ -819,10 +819,10 @@
       var r = rows[i];
       html +=
         "<tr>" +
-        '<td class="col-sticky col-num">' +
+        '<td class="col-num">' +
         (i + 1) +
         "</td>" +
-        '<td class="col-sticky col-ticker txt"><strong>' +
+        '<td class="col-ticker txt"><strong>' +
         escapeHtml(r.ticker) +
         "</strong></td>" +
         "<td>" + formatVn(r.senebiCiCompra) + "</td>" +
@@ -858,82 +858,229 @@
     wrap.style.display = "";
   }
 
+  function xmlEsc(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function ssCell(opts) {
+    var attrs = ' ss:StyleID="' + (opts.style || "sBase") + '"';
+    if (opts.mergeAcross) attrs += ' ss:MergeAcross="' + opts.mergeAcross + '"';
+    if (opts.mergeDown) attrs += ' ss:MergeDown="' + opts.mergeDown + '"';
+    if (opts.index) attrs += ' ss:Index="' + opts.index + '"';
+    if (opts.value === null || opts.value === undefined || opts.value === "") {
+      return "<Cell" + attrs + "/>";
+    }
+    var type = opts.type || "String";
+    var val = type === "Number" ? String(opts.value) : xmlEsc(opts.value);
+    return "<Cell" + attrs + '><Data ss:Type="' + type + '">' + val + "</Data></Cell>";
+  }
+
+  function ssRow(height, cells) {
+    var h = height ? ' ss:Height="' + height + '"' : "";
+    return "<Row" + h + ">" + cells.join("") + "</Row>";
+  }
+
+  function vnStyle(n) {
+    return Math.abs(n) > 0 ? "sNetoOff" : "sVn";
+  }
+
+  function flujoStyle(n) {
+    if (n > 0) return "sFlujoPos";
+    if (n < 0) return "sFlujoNeg";
+    return "sMoney";
+  }
+
+  function estadoStyle(estado) {
+    if (estado === "OK") return "sOk";
+    if (estado === "REVISAR PLAZOS") return "sRev";
+    if (estado === "DESCALCE") return "sDes";
+    return "sBase";
+  }
+
   function exportExcel() {
     if (!lastResult || !lastResult.dashboard.length) {
       setStatus("No hay resultado para exportar. Procesá los archivos primero.", "error");
       return;
     }
-    var XLSX = window.XLSX;
-    if (!XLSX) {
-      setStatus("No se pudo cargar la librería de exportación.", "error");
-      return;
+    var k = lastResult.kpis;
+    var rows = lastResult.dashboard;
+    var styles =
+      '<Styles>' +
+      '<Style ss:ID="sBase"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#E6EDF3"/><Interior ss:Color="#0D1117" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Right"/></Style>' +
+      '<Style ss:ID="sTitle"><Font ss:FontName="Segoe UI" ss:Size="16" ss:Color="#E6EDF3" ss:Bold="1"/><Interior ss:Color="#0D1117" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Left"/></Style>' +
+      '<Style ss:ID="sKpiL"><Font ss:FontName="Segoe UI" ss:Size="8" ss:Color="#8B949E" ss:Bold="1"/><Interior ss:Color="#161B22" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Left"/></Style>' +
+      '<Style ss:ID="sKpiV"><Font ss:FontName="Segoe UI" ss:Size="18" ss:Color="#E6EDF3" ss:Bold="1"/><Interior ss:Color="#161B22" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Left"/></Style>' +
+      '<Style ss:ID="sKpiRed"><Font ss:FontName="Segoe UI" ss:Size="18" ss:Color="#F85149" ss:Bold="1"/><Interior ss:Color="#161B22" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Left"/></Style>' +
+      '<Style ss:ID="sKpiAmb"><Font ss:FontName="Segoe UI" ss:Size="18" ss:Color="#D29922" ss:Bold="1"/><Interior ss:Color="#161B22" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Left"/></Style>' +
+      '<Style ss:ID="sHead"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#8B949E" ss:Bold="1"/><Interior ss:Color="#161B22" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Center" ss:WrapText="1"/></Style>' +
+      '<Style ss:ID="sSen"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#58A6FF" ss:Bold="1"/><Interior ss:Color="#0F2440" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Center" ss:WrapText="1"/></Style>' +
+      '<Style ss:ID="sPan"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#74ACDF" ss:Bold="1"/><Interior ss:Color="#13263A" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Center" ss:WrapText="1"/></Style>' +
+      '<Style ss:ID="sA3"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#F6B40E" ss:Bold="1"/><Interior ss:Color="#2E2408" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Center" ss:WrapText="1"/></Style>' +
+      '<Style ss:ID="sNeto"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#E6EDF3" ss:Bold="1"/><Interior ss:Color="#1C2333" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Center" ss:WrapText="1"/></Style>' +
+      '<Style ss:ID="sFlujo"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#8B949E" ss:Bold="1"/><Interior ss:Color="#1B1F26" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Center" ss:WrapText="1"/></Style>' +
+      '<Style ss:ID="sTxt"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#E6EDF3" ss:Bold="1"/><Interior ss:Color="#0D1117" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Left"/></Style>' +
+      '<Style ss:ID="sVn"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#E6EDF3"/><Interior ss:Color="#0D1117" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0;-#,##0;&quot;-&quot;"/><Alignment ss:Vertical="Center" ss:Horizontal="Right"/></Style>' +
+      '<Style ss:ID="sNetoOff"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#F85149" ss:Bold="1"/><Interior ss:Color="#0D1117" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0;-#,##0;&quot;-&quot;"/><Alignment ss:Vertical="Center" ss:Horizontal="Right"/></Style>' +
+      '<Style ss:ID="sMoney"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#E6EDF3"/><Interior ss:Color="#0D1117" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00;-#,##0.00;&quot;-&quot;"/><Alignment ss:Vertical="Center" ss:Horizontal="Right"/></Style>' +
+      '<Style ss:ID="sFlujoPos"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#3FB950"/><Interior ss:Color="#0D1117" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00;-#,##0.00;&quot;-&quot;"/><Alignment ss:Vertical="Center" ss:Horizontal="Right"/></Style>' +
+      '<Style ss:ID="sFlujoNeg"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#F85149"/><Interior ss:Color="#0D1117" ss:Pattern="Solid"/><NumberFormat ss:Format="#,##0.00;-#,##0.00;&quot;-&quot;"/><Alignment ss:Vertical="Center" ss:Horizontal="Right"/></Style>' +
+      '<Style ss:ID="sOk"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#3FB950" ss:Bold="1"/><Interior ss:Color="#12321D" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Center"/></Style>' +
+      '<Style ss:ID="sRev"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#D29922" ss:Bold="1"/><Interior ss:Color="#3A2D0B" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Center"/></Style>' +
+      '<Style ss:ID="sDes"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#F85149" ss:Bold="1"/><Interior ss:Color="#3D1418" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Center"/></Style>' +
+      '<Style ss:ID="sAlert"><Font ss:FontName="Segoe UI" ss:Size="9" ss:Color="#F85149" ss:Italic="1"/><Interior ss:Color="#0D1117" ss:Pattern="Solid"/><Alignment ss:Vertical="Center" ss:Horizontal="Left"/></Style>' +
+      "</Styles>";
+
+    var cols = "";
+    var widths = [18, 55, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 52, 58, 52, 58, 58, 70, 140];
+    for (var w = 0; w < widths.length; w++) {
+      cols += '<Column ss:Index="' + (w + 1) + '" ss:Width="' + widths[w] + '"/>';
     }
-    var dashAoa = [
-      [
-        "#",
-        "Ticker",
-        "SENEBI CI Compra",
-        "SENEBI CI Venta",
-        "SENEBI 24HS Compra",
-        "SENEBI 24HS Venta",
-        "PANTALLA CI Compra",
-        "PANTALLA CI Venta",
-        "PANTALLA 24HS Compra",
-        "PANTALLA 24HS Venta",
-        "A3 CI Compra",
-        "A3 CI Venta",
-        "A3 24HS Compra",
-        "A3 24HS Venta",
-        "Neto CI",
-        "Neto 24HS",
-        "Neto otros plazos",
-        "Neto total",
-        "Flujo CI",
-        "Flujo 24HS",
-        "Estado",
-        "Alerta"
-      ]
-    ];
-    lastResult.dashboard.forEach(function (r, idx) {
-      dashAoa.push([
-        idx + 1,
-        r.ticker,
-        r.senebiCiCompra,
-        r.senebiCiVenta,
-        r.senebi24Compra,
-        r.senebi24Venta,
-        r.pantCiCompra,
-        r.pantCiVenta,
-        r.pant24Compra,
-        r.pant24Venta,
-        r.a3CiCompra,
-        r.a3CiVenta,
-        r.a3_24Compra,
-        r.a3_24Venta,
-        r.netoCi,
-        r.neto24,
-        r.netoOtros,
-        r.netoTotal,
-        r.flujoCi,
-        r.flujo24,
-        r.estado,
-        r.alerta
-      ]);
-    });
-    var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dashAoa), "Dashboard");
+
+    var xmlRows = [];
+    xmlRows.push(
+      ssRow(24, [ssCell({ value: "Control de posiciones en títulos", style: "sTitle", mergeAcross: 21 })])
+    );
+    xmlRows.push(ssRow(8, []));
+    xmlRows.push(
+      ssRow(
+        16,
+        [
+          ssCell({ value: "TICKERS CONTROLADOS", style: "sKpiL", mergeAcross: 1, index: 2 }),
+          ssCell({ value: "DESCALCES", style: "sKpiL", mergeAcross: 1 }),
+          ssCell({ value: "REVISAR PLAZOS", style: "sKpiL", mergeAcross: 1 }),
+          ssCell({ value: "OPS SENEBI INCLUIDAS", style: "sKpiL", mergeAcross: 1 }),
+          ssCell({ value: "OPS PANTALLA INCLUIDAS", style: "sKpiL", mergeAcross: 1 }),
+          ssCell({ value: "OPS A3 INCLUIDAS", style: "sKpiL", mergeAcross: 1 })
+        ]
+      )
+    );
+    xmlRows.push(
+      ssRow(
+        28,
+        [
+          ssCell({ value: k.tickers, type: "Number", style: "sKpiV", mergeAcross: 1, index: 2 }),
+          ssCell({ value: k.descalces, type: "Number", style: k.descalces > 0 ? "sKpiRed" : "sKpiV", mergeAcross: 1 }),
+          ssCell({ value: k.revisar, type: "Number", style: k.revisar > 0 ? "sKpiAmb" : "sKpiV", mergeAcross: 1 }),
+          ssCell({ value: k.opsSenebi, type: "Number", style: "sKpiV", mergeAcross: 1 }),
+          ssCell({ value: k.opsPantalla, type: "Number", style: "sKpiV", mergeAcross: 1 }),
+          ssCell({ value: k.opsA3, type: "Number", style: "sKpiV", mergeAcross: 1 })
+        ]
+      )
+    );
+    xmlRows.push(ssRow(10, []));
+    xmlRows.push(
+      ssRow(
+        20,
+        [
+          ssCell({ value: "#", style: "sHead", mergeDown: 1 }),
+          ssCell({ value: "Ticker", style: "sHead", mergeDown: 1 }),
+          ssCell({ value: "BYMA · SENEBI", style: "sSen", mergeAcross: 3 }),
+          ssCell({ value: "BYMA · PANTALLA", style: "sPan", mergeAcross: 3 }),
+          ssCell({ value: "A3", style: "sA3", mergeAcross: 3 }),
+          ssCell({ value: "NETO VN", style: "sNeto", mergeAcross: 3 }),
+          ssCell({ value: "FLUJO $", style: "sFlujo", mergeAcross: 1 }),
+          ssCell({ value: "Estado", style: "sHead", mergeDown: 1 }),
+          ssCell({ value: "Alerta", style: "sHead", mergeDown: 1 })
+        ]
+      )
+    );
+    xmlRows.push(
+      ssRow(
+        28,
+        [
+          ssCell({ value: "CI Compra", style: "sSen", index: 3 }),
+          ssCell({ value: "CI Venta", style: "sSen" }),
+          ssCell({ value: "24HS Compra", style: "sSen" }),
+          ssCell({ value: "24HS Venta", style: "sSen" }),
+          ssCell({ value: "CI Compra", style: "sPan" }),
+          ssCell({ value: "CI Venta", style: "sPan" }),
+          ssCell({ value: "24HS Compra", style: "sPan" }),
+          ssCell({ value: "24HS Venta", style: "sPan" }),
+          ssCell({ value: "CI Compra", style: "sA3" }),
+          ssCell({ value: "CI Venta", style: "sA3" }),
+          ssCell({ value: "24HS Compra", style: "sA3" }),
+          ssCell({ value: "24HS Venta", style: "sA3" }),
+          ssCell({ value: "Neto CI", style: "sNeto" }),
+          ssCell({ value: "Neto 24HS", style: "sNeto" }),
+          ssCell({ value: "Neto otros plazos", style: "sNeto" }),
+          ssCell({ value: "Neto total", style: "sNeto" }),
+          ssCell({ value: "Flujo CI", style: "sFlujo" }),
+          ssCell({ value: "Flujo 24HS", style: "sFlujo" })
+        ]
+      )
+    );
+
+    function numCell(n, style) {
+      return ssCell({ value: n, type: "Number", style: style });
+    }
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      xmlRows.push(
+        ssRow(18, [
+          ssCell({ value: i + 1, type: "Number", style: "sBase" }),
+          ssCell({ value: r.ticker, style: "sTxt" }),
+          numCell(r.senebiCiCompra, "sVn"),
+          numCell(r.senebiCiVenta, "sVn"),
+          numCell(r.senebi24Compra, "sVn"),
+          numCell(r.senebi24Venta, "sVn"),
+          numCell(r.pantCiCompra, "sVn"),
+          numCell(r.pantCiVenta, "sVn"),
+          numCell(r.pant24Compra, "sVn"),
+          numCell(r.pant24Venta, "sVn"),
+          numCell(r.a3CiCompra, "sVn"),
+          numCell(r.a3CiVenta, "sVn"),
+          numCell(r.a3_24Compra, "sVn"),
+          numCell(r.a3_24Venta, "sVn"),
+          numCell(r.netoCi, vnStyle(r.netoCi)),
+          numCell(r.neto24, vnStyle(r.neto24)),
+          numCell(r.netoOtros, vnStyle(r.netoOtros)),
+          numCell(r.netoTotal, vnStyle(r.netoTotal)),
+          numCell(r.flujoCi, flujoStyle(r.flujoCi)),
+          numCell(r.flujo24, flujoStyle(r.flujo24)),
+          ssCell({ value: r.estado, style: estadoStyle(r.estado) }),
+          ssCell({ value: r.alerta || "", style: "sAlert" })
+        ])
+      );
+    }
+
+    var xml =
+      '<?xml version="1.0"?>\n' +
+      '<?mso-application progid="Excel.Sheet"?>\n' +
+      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' +
+      styles +
+      '<Worksheet ss:Name="Dashboard"><Table ss:ExpandedColumnCount="22" ss:ExpandedRowCount="' +
+      (7 + rows.length) +
+      '">' +
+      cols +
+      xmlRows.join("") +
+      "</Table></Worksheet></Workbook>";
+
     var stamp = new Date();
     var pad = function (n) {
       return (n < 10 ? "0" : "") + n;
     };
-    XLSX.writeFile(
-      wb,
+    var name =
       "control_posiciones_" +
-        stamp.getFullYear() +
-        pad(stamp.getMonth() + 1) +
-        pad(stamp.getDate()) +
-        ".xlsx"
-    );
+      stamp.getFullYear() +
+      pad(stamp.getMonth() + 1) +
+      pad(stamp.getDate()) +
+      ".xls";
+    var blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
   }
 
   function copyTable() {
