@@ -49,14 +49,14 @@
 
   function defaultConfig() {
     return {
-      agent: "95",
+      agent: "",
       bymaEstado: "Operada",
       a3Estado: "Activa",
       a3SoloPropia: true,
       tolerancia: 0,
       pantallaExecType: "Trade",
       caucionSegmento: "U",
-      ownAccounts: ["2676"],
+      ownAccounts: [],
       equivalencias: { TXS7X: "TZXS7", S2N6X: "S13N6" }
     };
   }
