@@ -631,18 +631,19 @@
   }
 
   function formatVn(num) {
-    if (!isFinite(num) || num === 0) return num === 0 ? "0" : "—";
+    if (!isFinite(num) || num === 0) return "-";
     return Math.round(num).toLocaleString("es-AR");
   }
 
   function formatMoney(num) {
-    if (!isFinite(num) || num === 0) return num === 0 ? "0" : "—";
-    return Number(num).toLocaleString("es-AR", { maximumFractionDigits: 2 });
+    if (!isFinite(num) || num === 0) return "-";
+    return Number(num).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   function setStatus(msg, kind) {
     var el = $("resultado");
     if (!el) return;
+    el.style.display = msg ? "block" : "none";
     el.textContent = msg;
     el.classList.remove("empty", "error", "warning", "has-result");
     if (kind === "error") el.classList.add("error");
@@ -752,51 +753,76 @@
   }
 
   function estadoClass(estado) {
-    if (estado === "OK") return "result-row-ok";
-    if (estado === "REVISAR PLAZOS") return "result-row-warning";
-    if (estado === "DESCALCE") return "result-row-excedido";
+    if (estado === "OK") return "estado-ok";
+    if (estado === "REVISAR PLAZOS") return "estado-rev";
+    if (estado === "DESCALCE") return "estado-des";
     return "";
   }
 
-  function renderKpis(kpis) {
-    $("kpi-tickers").textContent = kpis.tickers;
-    $("kpi-descalces").textContent = kpis.descalces;
-    $("kpi-plazos").textContent = kpis.revisar;
-    $("kpi-senebi").textContent = kpis.opsSenebi;
-    $("kpi-pantalla").textContent = kpis.opsPantalla;
-    $("kpi-a3").textContent = kpis.opsA3;
-    $("kpi-row").style.display = "";
+  function vnCell(n) {
+    var cls = Math.abs(n) > 0 ? ' class="neto-off"' : "";
+    return "<td" + cls + ">" + formatVn(n) + "</td>";
   }
 
-  function renderDashboard(rows) {
+  function flujoCell(n) {
+    var cls = n > 0 ? "flujo-pos" : n < 0 ? "flujo-neg" : "";
+    return '<td class="' + cls + '">' + formatMoney(n) + "</td>";
+  }
+
+  function kpiCard(label, value, extraClass) {
+    return (
+      '<div class="dash-kpi' +
+      (extraClass ? " " + extraClass : "") +
+      '"><span class="dash-kpi-label">' +
+      escapeHtml(label) +
+      '</span><span class="dash-kpi-value">' +
+      escapeHtml(String(value)) +
+      "</span></div>"
+    );
+  }
+
+  function renderDashboard(rows, kpis) {
     var wrap = $("result-table-wrap");
     var html =
-      '<table class="result-table" aria-label="Dashboard de posiciones">' +
+      '<div class="dash">' +
+      '<h3 class="dash-title">Control de posiciones en títulos</h3>' +
+      '<div class="dash-kpis">' +
+      kpiCard("Tickers controlados", kpis.tickers) +
+      kpiCard("Descalces", kpis.descalces, kpis.descalces > 0 ? "alert-red" : "") +
+      kpiCard("Revisar plazos", kpis.revisar, kpis.revisar > 0 ? "alert-amber" : "") +
+      kpiCard("Ops SENEBI incluidas", kpis.opsSenebi) +
+      kpiCard("Ops pantalla incluidas", kpis.opsPantalla) +
+      kpiCard("Ops A3 incluidas", kpis.opsA3) +
+      "</div>" +
+      '<div class="dash-table-wrap">' +
+      '<table class="dash-table" aria-label="Dashboard de posiciones">' +
       "<thead>" +
-      '<tr class="cp-group-row">' +
-      '<th rowspan="2">Ticker</th>' +
-      '<th colspan="4">BYMA · SENEBI</th>' +
-      '<th colspan="4">BYMA · PANTALLA</th>' +
-      '<th colspan="4">A3</th>' +
-      '<th colspan="4">NETO VN</th>' +
-      '<th colspan="2">FLUJO $</th>' +
-      '<th rowspan="2">Estado</th>' +
-      '<th rowspan="2">Alerta</th>' +
+      "<tr>" +
+      '<th class="g-plain col-sticky col-num" rowspan="2">#</th>' +
+      '<th class="g-plain col-sticky col-ticker txt" rowspan="2">Ticker</th>' +
+      '<th class="g-senebi" colspan="4">BYMA · SENEBI</th>' +
+      '<th class="g-pant" colspan="4">BYMA · PANTALLA</th>' +
+      '<th class="g-a3" colspan="4">A3</th>' +
+      '<th class="g-neto" colspan="4">NETO VN</th>' +
+      '<th class="g-flujo" colspan="2">FLUJO $</th>' +
+      '<th class="g-plain" rowspan="2">Estado</th>' +
+      '<th class="g-plain txt" rowspan="2">Alerta</th>' +
       "</tr>" +
       "<tr>" +
-      "<th>CI Compra</th><th>CI Venta</th><th>24HS Compra</th><th>24HS Venta</th>" +
-      "<th>CI Compra</th><th>CI Venta</th><th>24HS Compra</th><th>24HS Venta</th>" +
-      "<th>CI Compra</th><th>CI Venta</th><th>24HS Compra</th><th>24HS Venta</th>" +
-      "<th>Neto CI</th><th>Neto 24HS</th><th>Neto otros</th><th>Neto total</th>" +
-      "<th>Flujo CI</th><th>Flujo 24HS</th>" +
+      '<th class="h-senebi">CI<br>Compra</th><th class="h-senebi">CI<br>Venta</th><th class="h-senebi">24HS<br>Compra</th><th class="h-senebi">24HS<br>Venta</th>' +
+      '<th class="h-pant">CI<br>Compra</th><th class="h-pant">CI<br>Venta</th><th class="h-pant">24HS<br>Compra</th><th class="h-pant">24HS<br>Venta</th>' +
+      '<th class="h-a3">CI<br>Compra</th><th class="h-a3">CI<br>Venta</th><th class="h-a3">24HS<br>Compra</th><th class="h-a3">24HS<br>Venta</th>' +
+      '<th class="h-neto">Neto<br>CI</th><th class="h-neto">Neto<br>24HS</th><th class="h-neto">Neto<br>otros plazos</th><th class="h-neto">Neto<br>total</th>' +
+      '<th class="h-flujo">Flujo<br>CI</th><th class="h-flujo">Flujo<br>24HS</th>' +
       "</tr></thead><tbody>";
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
       html +=
-        '<tr class="' +
-        estadoClass(r.estado) +
-        '">' +
-        "<td><strong>" +
+        "<tr>" +
+        '<td class="col-sticky col-num">' +
+        (i + 1) +
+        "</td>" +
+        '<td class="col-sticky col-ticker txt"><strong>' +
         escapeHtml(r.ticker) +
         "</strong></td>" +
         "<td>" + formatVn(r.senebiCiCompra) + "</td>" +
@@ -811,81 +837,25 @@
         "<td>" + formatVn(r.a3CiVenta) + "</td>" +
         "<td>" + formatVn(r.a3_24Compra) + "</td>" +
         "<td>" + formatVn(r.a3_24Venta) + "</td>" +
-        "<td>" + formatVn(r.netoCi) + "</td>" +
-        "<td>" + formatVn(r.neto24) + "</td>" +
-        "<td>" + formatVn(r.netoOtros) + "</td>" +
-        "<td>" + formatVn(r.netoTotal) + "</td>" +
-        "<td>" + formatMoney(r.flujoCi) + "</td>" +
-        "<td>" + formatMoney(r.flujo24) + "</td>" +
-        "<td>" + escapeHtml(r.estado) + "</td>" +
-        "<td>" + escapeHtml(r.alerta || "") + "</td>" +
+        vnCell(r.netoCi) +
+        vnCell(r.neto24) +
+        vnCell(r.netoOtros) +
+        vnCell(r.netoTotal) +
+        flujoCell(r.flujoCi) +
+        flujoCell(r.flujo24) +
+        '<td class="' +
+        estadoClass(r.estado) +
+        '">' +
+        escapeHtml(r.estado) +
+        "</td>" +
+        '<td class="alerta">' +
+        escapeHtml(r.alerta || "") +
+        "</td>" +
         "</tr>";
     }
-    html += "</tbody></table>";
+    html += "</tbody></table></div></div>";
     wrap.innerHTML = html;
-    wrap.style.display = rows.length ? "" : "none";
-  }
-
-  function renderDetailTable(el, details, kind) {
-    if (!el) return;
-    if (!details.length) {
-      el.innerHTML = "<p class=\"form-hint\">Sin filas en este origen.</p>";
-      return;
-    }
-    var html = '<table class="result-table"><thead><tr>';
-    var cols;
-    if (kind === "byma") {
-      cols = [
-        ["id", "ID"],
-        ["instrumento", "Instrumento"],
-        ["ticker", "Ticker"],
-        ["plazo", "Plazo"],
-        ["estado", "Estado"],
-        ["cantidad", "VN"],
-        ["incluida", "Incluida"],
-        ["motivo", "Motivo"]
-      ];
-    } else if (kind === "a3") {
-      cols = [
-        ["id", "N° sec."],
-        ["posicion", "Posicion"],
-        ["ticker", "Ticker"],
-        ["plazo", "Plazo"],
-        ["tipo", "Tipo"],
-        ["propia", "Propia"],
-        ["cantidad", "VN"],
-        ["incluida", "Incluida"],
-        ["motivo", "Motivo"]
-      ];
-    } else {
-      cols = [
-        ["id", "Trade ID"],
-        ["clientId", "Client ID"],
-        ["symbol", "Symbol"],
-        ["ticker", "Ticker"],
-        ["plazo", "Plazo"],
-        ["side", "Side"],
-        ["cantidad", "VN"],
-        ["incluida", "Incluida"],
-        ["motivo", "Motivo"]
-      ];
-    }
-    for (var c = 0; c < cols.length; c++) html += "<th>" + cols[c][1] + "</th>";
-    html += "</tr></thead><tbody>";
-    for (var i = 0; i < details.length; i++) {
-      var d = details[i];
-      html += '<tr class="' + (d.incluida ? "result-row-ok" : "") + '">';
-      for (var j = 0; j < cols.length; j++) {
-        var key = cols[j][0];
-        var val = d[key];
-        if (key === "incluida") val = val ? "Sí" : "No";
-        else if (key === "cantidad") val = formatVn(val);
-        html += "<td>" + escapeHtml(val == null ? "" : val) + "</td>";
-      }
-      html += "</tr>";
-    }
-    html += "</tbody></table>";
-    el.innerHTML = html;
+    wrap.style.display = "";
   }
 
   function exportExcel() {
@@ -900,6 +870,7 @@
     }
     var dashAoa = [
       [
+        "#",
         "Ticker",
         "SENEBI CI Compra",
         "SENEBI CI Venta",
@@ -915,7 +886,7 @@
         "A3 24HS Venta",
         "Neto CI",
         "Neto 24HS",
-        "Neto otros",
+        "Neto otros plazos",
         "Neto total",
         "Flujo CI",
         "Flujo 24HS",
@@ -923,8 +894,9 @@
         "Alerta"
       ]
     ];
-    lastResult.dashboard.forEach(function (r) {
+    lastResult.dashboard.forEach(function (r, idx) {
       dashAoa.push([
+        idx + 1,
         r.ticker,
         r.senebiCiCompra,
         r.senebiCiVenta,
@@ -948,24 +920,8 @@
         r.alerta
       ]);
     });
-    function detailAoa(list, kind) {
-      var header;
-      if (kind === "byma") header = ["ID", "Instrumento", "Ticker", "Plazo", "Estado", "VN", "Incluida", "Motivo"];
-      else if (kind === "a3") header = ["N° sec.", "Posicion", "Ticker", "Plazo", "Tipo", "Propia", "VN", "Incluida", "Motivo"];
-      else header = ["Trade ID", "Client ID", "Symbol", "Ticker", "Plazo", "Side", "VN", "Incluida", "Motivo"];
-      var aoa = [header];
-      list.forEach(function (d) {
-        if (kind === "byma") aoa.push([d.id, d.instrumento, d.ticker, d.plazo, d.estado, d.cantidad, d.incluida, d.motivo]);
-        else if (kind === "a3") aoa.push([d.id, d.posicion, d.ticker, d.plazo, d.tipo, d.propia, d.cantidad, d.incluida, d.motivo]);
-        else aoa.push([d.id, d.clientId, d.symbol, d.ticker, d.plazo, d.side, d.cantidad, d.incluida, d.motivo]);
-      });
-      return aoa;
-    }
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dashAoa), "Dashboard");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailAoa(lastResult.byma, "byma")), "Detalle_BYMA");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailAoa(lastResult.pantalla, "pant")), "Detalle_PANTALLA");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailAoa(lastResult.a3, "a3")), "Detalle_A3");
     var stamp = new Date();
     var pad = function (n) {
       return (n < 10 ? "0" : "") + n;
@@ -987,6 +943,7 @@
     }
     var lines = [
       [
+        "#",
         "Ticker",
         "SENEBI CI C",
         "SENEBI CI V",
@@ -1002,15 +959,18 @@
         "A3 24 V",
         "Neto CI",
         "Neto 24",
-        "Neto otros",
+        "Neto otros plazos",
         "Neto total",
+        "Flujo CI",
+        "Flujo 24HS",
         "Estado",
         "Alerta"
       ].join("\t")
     ];
-    lastResult.dashboard.forEach(function (r) {
+    lastResult.dashboard.forEach(function (r, idx) {
       lines.push(
         [
+          idx + 1,
           r.ticker,
           r.senebiCiCompra,
           r.senebiCiVenta,
@@ -1028,6 +988,8 @@
           r.neto24,
           r.netoOtros,
           r.netoTotal,
+          r.flujoCi,
+          r.flujo24,
           r.estado,
           r.alerta
         ].join("\t")
@@ -1069,37 +1031,39 @@
           cfg
         );
         lastResult = result;
-        renderKpis(result.kpis);
-        renderDashboard(result.dashboard);
-        renderDetailTable($("detalle-byma"), result.byma, "byma");
-        renderDetailTable($("detalle-pantalla"), result.pantalla, "pantalla");
-        renderDetailTable($("detalle-a3"), result.a3, "a3");
-        $("detalles-wrap").style.display = "";
+        renderDashboard(result.dashboard, result.kpis);
         $("result-actions").style.display = result.dashboard.length ? "" : "none";
         var checks = [];
         checks.push("SENEBI " + headerBadges(result.headerCheck.byma, !!fByma));
-        checks.push("Pantalla " + headerBadges(result.headerCheck.pantalla, !!fPant) + (fPant ? " (" + result.headerCheck.pantallaMode + ")" : ""));
+        checks.push("Pantalla " + headerBadges(result.headerCheck.pantalla, !!fPant));
         checks.push("A3 " + headerBadges(result.headerCheck.a3, !!fA3));
         var missingAny =
           (fByma && result.headerCheck.byma.length) ||
           (fPant && result.headerCheck.pantalla.length) ||
           (fA3 && result.headerCheck.a3.length);
-        var msg =
-          result.kpis.tickers +
-          " tickers · " +
-          result.kpis.descalces +
-          " descalces · " +
-          result.kpis.revisar +
-          " a revisar plazos. " +
-          checks.join(" · ");
-        if (!result.dashboard.length) {
-          setStatus("No quedó ningún ticker incluido. Revisá agente, comitentes propios y encabezados. " + checks.join(" · "), "warning");
+        if (missingAny) {
+          setStatus("Encabezados: " + checks.join(" · "), "warning");
+        } else if (!result.dashboard.length) {
+          setStatus("No quedó ningún ticker incluido. Revisá agente, comitentes y encabezados.", "warning");
         } else {
-          setStatus(msg, missingAny || result.kpis.descalces || result.kpis.revisar ? "warning" : "ok");
+          var el = $("resultado");
+          if (el) {
+            el.textContent = "";
+            el.classList.add("empty");
+            el.classList.remove("error", "warning", "has-result");
+            el.style.display = "none";
+          }
         }
       })
       .catch(function (err) {
         lastResult = null;
+        var wrap = $("result-table-wrap");
+        if (wrap) {
+          wrap.style.display = "none";
+          wrap.innerHTML = "";
+        }
+        var actions = $("result-actions");
+        if (actions) actions.style.display = "none";
         setStatus(err.message || String(err), "error");
       });
   }
