@@ -128,7 +128,7 @@
     .neto-off { color: #f85149; font-weight: 700; }
     .flujo-pos { color: #3fb950; }
     .flujo-neg { color: #f85149; }
-    .alerta { color: #f85149; font-style: italic; text-align: left; }
+    .req { color: #f85149; font-weight: 700; }
     .equiv-table { width: 100%; border-collapse: collapse; margin-top: 0.4rem; }
     .equiv-table th, .equiv-table td { padding: 0.3rem 0.35rem; text-align: left; }
     .equiv-table input[type="text"] { width: 100%; }
@@ -195,13 +195,13 @@
 
             <aside class="cp-col-config">
               <div class="form-group">
-                <label for="nro-agente">Nro. de agente propio (BYMA)</label>
-                <input type="text" id="nro-agente" name="agente" value="" autocomplete="off">
+                <label for="nro-agente">Nro. de agente propio (BYMA) <span class="req" aria-hidden="true">*</span></label>
+                <input type="text" id="nro-agente" name="agente" value="" autocomplete="off" required>
                 <span class="form-hint">Cuentan las puntas donde vendedor o comprador es este agente y hay cartera.</span>
               </div>
               <div class="form-group">
-                <label for="comitentes">Comitentes de cartera propia (pantalla)</label>
-                <input type="text" id="comitentes" name="comitentes" value="" autocomplete="off">
+                <label for="comitentes">Comitentes de cartera propia (pantalla) <span class="req" aria-hidden="true">*</span></label>
+                <input type="text" id="comitentes" name="comitentes" value="" autocomplete="off" required>
                 <span class="form-hint">Sólo las ops de pantalla de estas cuentas. Separá por coma o espacio.</span>
               </div>
               <div class="form-group">
