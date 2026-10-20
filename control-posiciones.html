@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="assets/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
+  <title>Control de posiciones | ALLINARG</title>
+  <meta name="description" content="Control de posiciones en títulos: SENEBI, pantalla BYMA y A3. El cruce se hace en el navegador; no se guardan archivos ni resultados.">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .form-block { max-width: 1180px; }
+    .result-block.warning { background: rgba(210, 153, 34, 0.12); border-left: 4px solid #d29922; }
+    .privacy-note {
+      margin: 0.75rem 0 1rem;
+      padding: 0.7rem 0.9rem;
+      border: 1px solid var(--border-subtle);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      line-height: 1.45;
+    }
+    .instructivo-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1.25rem; }
+    .instructivo-actions a.btn { text-decoration: none; color: #fff; }
+    .cp-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+      gap: 1.5rem;
+      align-items: start;
+    }
+    .cp-col-files .form-group { margin-bottom: 1rem; }
+    .cp-col-config {
+      padding: 1rem;
+      background: rgba(13, 17, 23, 0.4);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+    }
+    .cp-col-config .form-group { margin-bottom: 1rem; }
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.6rem;
+      margin: 1rem 0 0;
+    }
+    .kpi {
+      padding: 0.65rem 0.7rem;
+      background: rgba(13, 17, 23, 0.45);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+    }
+    .kpi-label { display: block; font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
+    .kpi-value { display: block; margin-top: 0.2rem; font-size: 1.25rem; font-weight: 600; color: var(--text-primary); }
+    .equiv-table { width: 100%; border-collapse: collapse; margin-top: 0.4rem; }
+    .equiv-table th, .equiv-table td { padding: 0.3rem 0.35rem; text-align: left; }
+    .equiv-table input[type="text"] { width: 100%; }
+    .btn-row-remove {
+      padding: 0.35rem 0.6rem;
+      font-size: 0.9rem;
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .btn-row-remove:hover { color: #f85149; border-color: #f85149; }
+    .cp-group-row th { text-align: center; }
+    @media (max-width: 900px) {
+      .cp-layout { grid-template-columns: 1fr; }
+      .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body class="page-interna">
+  <div class="ticker-wrap ticker-wrap-delayed" aria-label="Último operado con demora">
+    <div id="ticker-bar" class="ticker-bar"></div>
+    <p class="ticker-delay">Último operado con demora (Data912, caché de unas 2 horas).</p>
+  </div>
+  <div class="container">
+    <div class="page-header-row">
+      <a href="index.html" class="back-link">← Volver</a>
+      <header class="site-header">
+        <h1 class="site-logo"><img src="assets/logo-wordmark.png" alt="ALLINARG Financial Tools"></h1>
+        <div class="header-marks">
+          <span class="header-flag" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 16" width="32" height="22"><rect fill="#74ACDF" width="24" height="16"/><rect y="5.33" fill="#FFF" width="24" height="5.34"/><circle cx="12" cy="8" r="2.5" fill="#F4B800"/></svg></span>
+        </div>
+      </header>
+    </div>
+
+    <main class="page-content">
+      <section class="form-block">
+        <h2 class="tool-title">Control de posiciones</h2>
+        <p class="tool-desc">Cruce de posiciones en títulos entre BYMA (SENEBI + pantalla) y A3.</p>
+        <p class="privacy-note"><strong>Nada se guarda.</strong> Los archivos se leen solo en este navegador: no hay envío a un servidor, ni localStorage de carteras, operaciones o resultados. Al recargar o cerrar la pestaña, el control desaparece.</p>
+        <div class="instructivo-actions">
+          <a class="btn" href="assets/instructivo-control-posiciones.pdf" target="_blank" rel="noopener">Abrir instructivo (PDF)</a>
+          <a class="btn btn-secondary" href="assets/instructivo-control-posiciones.pdf" download="instructivo-control-posiciones.pdf">Descargar PDF</a>
+        </div>
+
+        <form id="form-control-posiciones" novalidate action="javascript:void(0);">
+          <div class="cp-layout">
+            <div class="cp-col-files">
+              <div class="form-group">
+                <label for="file-byma">SENEBI</label>
+                <input type="file" id="file-byma" name="byma" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              </div>
+              <div class="form-group">
+                <label for="file-pantalla">Pantalla</label>
+                <input type="file" id="file-pantalla" name="pantalla" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              </div>
+              <div class="form-group">
+                <label for="file-a3">A3</label>
+                <input type="file" id="file-a3" name="a3" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              </div>
+              <div class="form-actions">
+                <button type="button" id="btn-procesar">Procesar</button>
+              </div>
+
+              <div class="result-wrap">
+                <div id="kpi-row" class="kpi-row" style="display:none;">
+                  <div class="kpi"><span class="kpi-label">Tickers</span><span class="kpi-value" id="kpi-tickers">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Descalces</span><span class="kpi-value" id="kpi-descalces">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Revisar plazos</span><span class="kpi-value" id="kpi-plazos">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Ops SENEBI</span><span class="kpi-value" id="kpi-senebi">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Ops pantalla</span><span class="kpi-value" id="kpi-pantalla">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Ops A3</span><span class="kpi-value" id="kpi-a3">0</span></div>
+                </div>
+                <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
+                <div id="result-table-wrap" class="result-table-wrap" style="display: none;"></div>
+                <div id="result-actions" class="result-actions" style="display: none;">
+                  <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                  <button type="button" id="btn-exportar-excel" class="btn btn-icon btn-excel" title="Exportar a Excel" aria-label="Exportar a Excel"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+                </div>
+                <div id="detalles-wrap" style="display:none;">
+                  <details class="supuestos" open>
+                    <summary>Detalle BYMA (SENEBI)</summary>
+                    <div id="detalle-byma" class="result-table-wrap"></div>
+                  </details>
+                  <details class="supuestos">
+                    <summary>Detalle pantalla</summary>
+                    <div id="detalle-pantalla" class="result-table-wrap"></div>
+                  </details>
+                  <details class="supuestos">
+                    <summary>Detalle A3</summary>
+                    <div id="detalle-a3" class="result-table-wrap"></div>
+                  </details>
+                </div>
+              </div>
+            </div>
+
+            <aside class="cp-col-config">
+              <div class="form-group">
+                <label for="nro-agente">Nro. de agente propio (BYMA)</label>
+                <input type="text" id="nro-agente" name="agente" value="" autocomplete="off">
+                <span class="form-hint">Cuentan las puntas donde vendedor o comprador es este agente y hay cartera.</span>
+              </div>
+              <div class="form-group">
+                <label for="comitentes">Comitentes de cartera propia (pantalla)</label>
+                <input type="text" id="comitentes" name="comitentes" value="" autocomplete="off">
+                <span class="form-hint">Sólo las ops de pantalla de estas cuentas. Separá por coma o espacio.</span>
+              </div>
+              <div class="form-group">
+                <label>Equivalencias de códigos</label>
+                <table class="equiv-table">
+                  <thead><tr><th>Código</th><th>Ticker unificado</th><th></th></tr></thead>
+                  <tbody id="equiv-body"></tbody>
+                </table>
+                <button type="button" id="btn-add-equiv" class="btn btn-secondary" style="margin-top:0.5rem;">Agregar equivalencia</button>
+              </div>
+            </aside>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-contact">
+        <span>X: <a href="https://x.com/allinarg" target="_blank" rel="noopener">@allinarg</a></span>
+      </div>
+      <p class="footer-disclaimer">Cálculos estimativos, no constituyen recomendación de inversión.</p>
+    </footer>
+  </div>
+
+  <script src="assets/xlsx.full.min.js"></script>
+  <script src="assets/js/control-posiciones.js"></script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>
