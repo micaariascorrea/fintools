@@ -696,8 +696,8 @@
     var cfg = CP.defaultConfig();
     cfg.agent = ($("nro-agente") && $("nro-agente").value.trim()) || "";
     cfg.ownAccounts = parseOwnAccounts($("comitentes") ? $("comitentes").value : "");
-    cfg.tolerancia = CP.parseNumber($("tolerancia") ? $("tolerancia").value : 0);
-    cfg.a3SoloPropia = !$("a3-incluir-terceros") || !$("a3-incluir-terceros").checked;
+    cfg.tolerancia = 0;
+    cfg.a3SoloPropia = true;
     cfg.equivalencias = readEquivalencias();
     return cfg;
   }

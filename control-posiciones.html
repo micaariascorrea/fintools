@@ -22,22 +22,25 @@
       color: var(--text-secondary);
       line-height: 1.45;
     }
-    .instructivo {
-      margin: 0 0 1.25rem;
-      padding: 0.85rem 1rem;
+    .instructivo-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1.25rem; }
+    .instructivo-actions a.btn { text-decoration: none; color: #fff; }
+    .cp-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+      gap: 1.5rem;
+      align-items: start;
+    }
+    .cp-col-files .form-group { margin-bottom: 1rem; }
+    .cp-col-config {
+      padding: 1rem;
       background: rgba(13, 17, 23, 0.4);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-sm);
     }
-    .instructivo h3 { margin: 0 0 0.5rem; font-size: 1rem; }
-    .instructivo ol { margin: 0.35rem 0 0.7rem; padding-left: 1.2rem; color: var(--text-secondary); font-size: 0.88rem; }
-    .instructivo table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin: 0.4rem 0 0.7rem; }
-    .instructivo th, .instructivo td { text-align: left; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border-subtle); vertical-align: top; }
-    .instructivo-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
-    .instructivo-actions a.btn { text-decoration: none; color: #fff; }
+    .cp-col-config .form-group { margin-bottom: 1rem; }
     .kpi-row {
       display: grid;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 0.6rem;
       margin: 1rem 0 0;
     }
@@ -62,9 +65,8 @@
     }
     .btn-row-remove:hover { color: #f85149; border-color: #f85149; }
     .cp-group-row th { text-align: center; }
-    .checkbox-label { font-weight: normal; color: var(--text-primary); }
-    .checkbox-label input { width: auto; margin-right: 0.4rem; }
     @media (max-width: 900px) {
+      .cp-layout { grid-template-columns: 1fr; }
       .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
@@ -88,110 +90,86 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Control de posiciones</h2>
-        <p class="tool-desc">Cruce de posiciones en títulos entre BYMA (SENEBI + pantalla) y A3, igual que la planilla Control_Posiciones_BYMA_A3. El VN tiene que netear en CI y en 24HS sumando los tres orígenes.</p>
+        <p class="tool-desc">Cruce de posiciones en títulos entre BYMA (SENEBI + pantalla) y A3.</p>
         <p class="privacy-note"><strong>Nada se guarda.</strong> Los archivos se leen solo en este navegador: no hay envío a un servidor, ni localStorage de carteras, operaciones o resultados. Al recargar o cerrar la pestaña, el control desaparece.</p>
-
-        <div class="instructivo">
-          <h3>Instructivo de uso diario</h3>
-          <ol>
-            <li><strong>BYMA · SENEBI:</strong> export Senebi_Operaciones_Todas, con encabezados (xlsx o csv).</li>
-            <li><strong>BYMA · pantalla:</strong> CSV de pantalla tal cual viene (Client ID, Symbol, Side…).</li>
-            <li><strong>A3:</strong> export OperacionesPropiasHoy, con encabezados. Las cauciones se descartan solas (Tipo distinto de Compra/Venta).</li>
-            <li><strong>Resultado:</strong> revisar el estado de cada ticker.</li>
-          </ol>
-          <table>
-            <thead><tr><th>Estado</th><th>Significado</th></tr></thead>
-            <tbody>
-              <tr><td>OK</td><td>VN neteado en CI y en 24HS.</td></tr>
-              <tr><td>REVISAR PLAZOS</td><td>Netea en el total, pero queda abierto en algún plazo.</td></tr>
-              <tr><td>DESCALCE</td><td>El VN total del título no netea.</td></tr>
-            </tbody>
-          </table>
-          <p class="form-hint">Sólo entran operaciones ejecutadas (Operada / Activa / Trade). Si algo no cierra: chequeá encabezados, comitentes de cartera propia y equivalencias de códigos entre mercados (ej. TXS7X → TZXS7).</p>
-          <div class="instructivo-actions">
-            <a class="btn" href="assets/instructivo-control-posiciones.pdf" target="_blank" rel="noopener">Abrir instructivo (PDF)</a>
-            <a class="btn btn-secondary" href="assets/instructivo-control-posiciones.pdf" download="instructivo-control-posiciones.pdf">Descargar PDF</a>
-          </div>
+        <div class="instructivo-actions">
+          <a class="btn" href="assets/instructivo-control-posiciones.pdf" target="_blank" rel="noopener">Abrir instructivo (PDF)</a>
+          <a class="btn btn-secondary" href="assets/instructivo-control-posiciones.pdf" download="instructivo-control-posiciones.pdf">Descargar PDF</a>
         </div>
 
         <form id="form-control-posiciones" novalidate action="javascript:void(0);">
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="file-byma">SENEBI (Operaciones Todas)</label>
-              <input type="file" id="file-byma" name="byma" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+          <div class="cp-layout">
+            <div class="cp-col-files">
+              <div class="form-group">
+                <label for="file-byma">SENEBI</label>
+                <input type="file" id="file-byma" name="byma" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              </div>
+              <div class="form-group">
+                <label for="file-pantalla">Pantalla</label>
+                <input type="file" id="file-pantalla" name="pantalla" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              </div>
+              <div class="form-group">
+                <label for="file-a3">A3</label>
+                <input type="file" id="file-a3" name="a3" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              </div>
+              <div class="form-actions">
+                <button type="button" id="btn-procesar">Procesar</button>
+              </div>
+
+              <div class="result-wrap">
+                <div id="kpi-row" class="kpi-row" style="display:none;">
+                  <div class="kpi"><span class="kpi-label">Tickers</span><span class="kpi-value" id="kpi-tickers">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Descalces</span><span class="kpi-value" id="kpi-descalces">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Revisar plazos</span><span class="kpi-value" id="kpi-plazos">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Ops SENEBI</span><span class="kpi-value" id="kpi-senebi">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Ops pantalla</span><span class="kpi-value" id="kpi-pantalla">0</span></div>
+                  <div class="kpi"><span class="kpi-label">Ops A3</span><span class="kpi-value" id="kpi-a3">0</span></div>
+                </div>
+                <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
+                <div id="result-table-wrap" class="result-table-wrap" style="display: none;"></div>
+                <div id="result-actions" class="result-actions" style="display: none;">
+                  <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                  <button type="button" id="btn-exportar-excel" class="btn btn-icon btn-excel" title="Exportar a Excel" aria-label="Exportar a Excel"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+                </div>
+                <div id="detalles-wrap" style="display:none;">
+                  <details class="supuestos" open>
+                    <summary>Detalle BYMA (SENEBI)</summary>
+                    <div id="detalle-byma" class="result-table-wrap"></div>
+                  </details>
+                  <details class="supuestos">
+                    <summary>Detalle pantalla</summary>
+                    <div id="detalle-pantalla" class="result-table-wrap"></div>
+                  </details>
+                  <details class="supuestos">
+                    <summary>Detalle A3</summary>
+                    <div id="detalle-a3" class="result-table-wrap"></div>
+                  </details>
+                </div>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="file-pantalla">Pantalla BYMA (CSV Millenium)</label>
-              <input type="file" id="file-pantalla" name="pantalla" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-            </div>
-            <div class="form-group">
-              <label for="file-a3">A3 (OperacionesPropiasHoy)</label>
-              <input type="file" id="file-a3" name="a3" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-            </div>
-            <div class="form-group">
-              <label for="nro-agente">Nro. de agente propio (BYMA)</label>
-              <input type="text" id="nro-agente" name="agente" value="95" autocomplete="off">
-              <span class="form-hint">Cuentan las puntas donde vendedor o comprador es este agente y hay cartera (no “-”).</span>
-            </div>
-            <div class="form-group form-span">
-              <label for="comitentes">Comitentes de cartera propia (pantalla)</label>
-              <input type="text" id="comitentes" name="comitentes" value="2676" autocomplete="off" placeholder="Ej: 2676, 3209">
-              <span class="form-hint">Sólo las ops de pantalla de estas cuentas. Separá por coma o espacio.</span>
-            </div>
-            <div class="form-group">
-              <label for="tolerancia">Tolerancia de VN</label>
-              <input type="text" id="tolerancia" name="tolerancia" value="0" inputmode="decimal" autocomplete="off">
-              <span class="form-hint">Diferencia absoluta aceptada como OK (0 = exacto).</span>
-            </div>
-            <div class="form-group">
-              <label class="checkbox-label"><input type="checkbox" id="a3-incluir-terceros"> A3: incluir también ops que no son Propia = Si</label>
-              <span class="form-hint">Por defecto, como en la planilla, sólo cartera propia. Las cauciones (Tomadora/Colocadora) no entran.</span>
-            </div>
-            <div class="form-group form-span">
-              <label>Equivalencias de códigos</label>
-              <span class="form-hint">Código en el mercado → ticker unificado. Los códigos con X de BYMA sin fila acá disparan alerta.</span>
-              <table class="equiv-table">
-                <thead><tr><th>Código</th><th>Ticker unificado</th><th></th></tr></thead>
-                <tbody id="equiv-body"></tbody>
-              </table>
-              <button type="button" id="btn-add-equiv" class="btn btn-secondary" style="margin-top:0.5rem;">Agregar equivalencia</button>
-            </div>
-            <div class="form-actions">
-              <button type="button" id="btn-procesar">Procesar</button>
-            </div>
+
+            <aside class="cp-col-config">
+              <div class="form-group">
+                <label for="nro-agente">Nro. de agente propio (BYMA)</label>
+                <input type="text" id="nro-agente" name="agente" value="95" autocomplete="off">
+                <span class="form-hint">Cuentan las puntas donde vendedor o comprador es este agente y hay cartera.</span>
+              </div>
+              <div class="form-group">
+                <label for="comitentes">Comitentes de cartera propia (pantalla)</label>
+                <input type="text" id="comitentes" name="comitentes" value="2676" autocomplete="off" placeholder="Ej: 2676, 3209">
+                <span class="form-hint">Sólo las ops de pantalla de estas cuentas. Separá por coma o espacio.</span>
+              </div>
+              <div class="form-group">
+                <label>Equivalencias de códigos</label>
+                <table class="equiv-table">
+                  <thead><tr><th>Código</th><th>Ticker unificado</th><th></th></tr></thead>
+                  <tbody id="equiv-body"></tbody>
+                </table>
+                <button type="button" id="btn-add-equiv" class="btn btn-secondary" style="margin-top:0.5rem;">Agregar equivalencia</button>
+              </div>
+            </aside>
           </div>
         </form>
-
-        <div class="result-wrap">
-          <div id="kpi-row" class="kpi-row" style="display:none;">
-            <div class="kpi"><span class="kpi-label">Tickers</span><span class="kpi-value" id="kpi-tickers">0</span></div>
-            <div class="kpi"><span class="kpi-label">Descalces</span><span class="kpi-value" id="kpi-descalces">0</span></div>
-            <div class="kpi"><span class="kpi-label">Revisar plazos</span><span class="kpi-value" id="kpi-plazos">0</span></div>
-            <div class="kpi"><span class="kpi-label">Ops SENEBI</span><span class="kpi-value" id="kpi-senebi">0</span></div>
-            <div class="kpi"><span class="kpi-label">Ops pantalla</span><span class="kpi-value" id="kpi-pantalla">0</span></div>
-            <div class="kpi"><span class="kpi-label">Ops A3</span><span class="kpi-value" id="kpi-a3">0</span></div>
-          </div>
-          <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
-          <div id="result-table-wrap" class="result-table-wrap" style="display: none;"></div>
-          <div id="result-actions" class="result-actions" style="display: none;">
-            <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-            <button type="button" id="btn-exportar-excel" class="btn btn-icon btn-excel" title="Exportar a Excel" aria-label="Exportar a Excel"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-          </div>
-          <div id="detalles-wrap" style="display:none;">
-            <details class="supuestos" open>
-              <summary>Detalle BYMA (SENEBI)</summary>
-              <div id="detalle-byma" class="result-table-wrap"></div>
-            </details>
-            <details class="supuestos">
-              <summary>Detalle pantalla</summary>
-              <div id="detalle-pantalla" class="result-table-wrap"></div>
-            </details>
-            <details class="supuestos">
-              <summary>Detalle A3</summary>
-              <div id="detalle-a3" class="result-table-wrap"></div>
-            </details>
-          </div>
-        </div>
       </section>
     </main>
 
