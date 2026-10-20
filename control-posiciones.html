@@ -10,7 +10,13 @@
   <meta name="description" content="Control de posiciones en títulos: SENEBI, pantalla BYMA y A3. El cruce se hace en el navegador; no se guardan archivos ni resultados.">
   <link rel="stylesheet" href="styles.css">
   <style>
-    .form-block { max-width: 100%; }
+    body.page-control-pos .container {
+      max-width: none;
+      width: 100%;
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+    .form-block { max-width: none; width: 100%; }
     .result-block.warning { background: rgba(210, 153, 34, 0.12); border-left: 4px solid #d29922; }
     .privacy-note {
       margin: 0.75rem 0 1rem;
@@ -26,9 +32,12 @@
     .instructivo-actions a.btn { text-decoration: none; color: #fff; }
     .cp-layout {
       display: grid;
-      grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
-      gap: 1.5rem;
-      align-items: start;
+      grid-template-columns: minmax(240px, 420px) minmax(240px, 420px);
+      gap: 2rem;
+      align-items: center;
+      justify-content: center;
+      max-width: 920px;
+      margin: 0 auto 0.5rem;
     }
     .cp-col-files .form-group { margin-bottom: 1rem; }
     .cp-col-config {
@@ -80,29 +89,26 @@
     }
     .dash-kpi.alert-red .dash-kpi-value { color: #f85149; }
     .dash-kpi.alert-amber .dash-kpi-value { color: #d29922; }
-    .dash-table-wrap { overflow: auto; max-height: 70vh; }
+    .dash-table-wrap { overflow: visible; }
     .dash-table {
-      width: max-content;
-      min-width: 100%;
+      width: 100%;
+      table-layout: fixed;
       border-collapse: separate;
       border-spacing: 0;
-      font-size: 0.72rem;
+      font-size: clamp(0.58rem, 0.72vw, 0.78rem);
       color: #e6edf3;
     }
     .dash-table th,
     .dash-table td {
-      padding: 0.32rem 0.45rem;
+      padding: 0.28rem 0.22rem;
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      white-space: nowrap;
       text-align: right;
       font-variant-numeric: tabular-nums;
       background: #0d1117;
+      overflow: hidden;
     }
     .dash-table th { font-weight: 700; color: #8b949e; }
     .dash-table .txt { text-align: left; }
-    .dash-table thead th { position: sticky; z-index: 3; }
-    .dash-table thead tr:first-child th { top: 0; }
-    .dash-table thead tr:nth-child(2) th { top: 1.7rem; }
     .g-senebi { background: #0f2440 !important; color: #58a6ff !important; text-align: center; }
     .g-pant { background: #13263a !important; color: #74acdf !important; text-align: center; }
     .g-a3 { background: #2e2408 !important; color: #f6b40e !important; text-align: center; }
@@ -114,10 +120,8 @@
     .h-a3 { background: #2e2408 !important; color: #f6b40e !important; }
     .h-neto { background: #1c2333 !important; color: #e6edf3 !important; }
     .h-flujo { background: #1b1f26 !important; color: #8b949e !important; }
-    .col-sticky { position: sticky; z-index: 2; }
-    .dash-table thead .col-sticky { z-index: 5; }
-    .col-num { left: 0; min-width: 2rem; text-align: center; }
-    .col-ticker { left: 2rem; min-width: 5.5rem; }
+    .col-num { text-align: center; width: 2%; }
+    .col-ticker { min-width: 4.2rem; }
     .estado-ok { color: #3fb950 !important; background: #12321d !important; font-weight: 700; text-align: center; }
     .estado-des { color: #f85149 !important; background: #3d1418 !important; font-weight: 700; text-align: center; }
     .estado-rev { color: #d29922 !important; background: #3a2d0b !important; font-weight: 700; text-align: center; }
@@ -144,7 +148,7 @@
     }
   </style>
 </head>
-<body class="page-interna">
+<body class="page-interna page-control-pos">
   <div class="ticker-wrap ticker-wrap-delayed" aria-label="Último operado con demora">
     <div id="ticker-bar" class="ticker-bar"></div>
     <p class="ticker-delay">Último operado con demora (Data912, caché de unas 2 horas).</p>
@@ -166,8 +170,7 @@
         <p class="tool-desc">Cruce de posiciones en títulos entre BYMA (SENEBI + pantalla) y A3.</p>
         <p class="privacy-note"><strong>Nada se guarda.</strong> Los archivos se leen solo en este navegador: no hay envío a un servidor, ni localStorage de carteras, operaciones o resultados. Al recargar o cerrar la pestaña, el control desaparece.</p>
         <div class="instructivo-actions">
-          <a class="btn" href="assets/instructivo-control-posiciones.pdf" target="_blank" rel="noopener">Abrir instructivo (PDF)</a>
-          <a class="btn btn-secondary" href="assets/instructivo-control-posiciones.pdf" download="instructivo-control-posiciones.pdf">Descargar PDF</a>
+          <a class="btn" href="assets/instructivo-control-posiciones.pdf" target="_blank" rel="noopener">Instructivo</a>
         </div>
 
         <form id="form-control-posiciones" novalidate action="javascript:void(0);">
