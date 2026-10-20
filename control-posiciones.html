@@ -10,7 +10,7 @@
   <meta name="description" content="Control de posiciones en títulos: SENEBI, pantalla BYMA y A3. El cruce se hace en el navegador; no se guardan archivos ni resultados.">
   <link rel="stylesheet" href="styles.css">
   <style>
-    .form-block { max-width: 1180px; }
+    .form-block { max-width: 100%; }
     .result-block.warning { background: rgba(210, 153, 34, 0.12); border-left: 4px solid #d29922; }
     .privacy-note {
       margin: 0.75rem 0 1rem;
@@ -38,20 +38,93 @@
       border-radius: var(--radius-sm);
     }
     .cp-col-config .form-group { margin-bottom: 1rem; }
-    .kpi-row {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 0.6rem;
-      margin: 1rem 0 0;
-    }
-    .kpi {
-      padding: 0.65rem 0.7rem;
-      background: rgba(13, 17, 23, 0.45);
+    .dash {
+      margin-top: 0.5rem;
+      background: #0d1117;
       border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-sm);
+      border-radius: var(--radius);
+      overflow: hidden;
     }
-    .kpi-label { display: block; font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
-    .kpi-value { display: block; margin-top: 0.2rem; font-size: 1.25rem; font-weight: 600; color: var(--text-primary); }
+    .dash-title {
+      margin: 0;
+      padding: 0.85rem 1rem 0.35rem;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #e6edf3;
+    }
+    .dash-kpis {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
+      gap: 0.5rem;
+      padding: 0.45rem 1rem 0.9rem;
+    }
+    .dash-kpi {
+      background: #161b22;
+      border-radius: 8px;
+      padding: 0.45rem 0.65rem;
+    }
+    .dash-kpi-label {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #8b949e;
+      text-transform: uppercase;
+    }
+    .dash-kpi-value {
+      display: block;
+      margin-top: 0.15rem;
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #e6edf3;
+    }
+    .dash-kpi.alert-red .dash-kpi-value { color: #f85149; }
+    .dash-kpi.alert-amber .dash-kpi-value { color: #d29922; }
+    .dash-table-wrap { overflow: auto; max-height: 70vh; }
+    .dash-table {
+      width: max-content;
+      min-width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.72rem;
+      color: #e6edf3;
+    }
+    .dash-table th,
+    .dash-table td {
+      padding: 0.32rem 0.45rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      white-space: nowrap;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      background: #0d1117;
+    }
+    .dash-table th { font-weight: 700; color: #8b949e; }
+    .dash-table .txt { text-align: left; }
+    .dash-table thead th { position: sticky; z-index: 3; }
+    .dash-table thead tr:first-child th { top: 0; }
+    .dash-table thead tr:nth-child(2) th { top: 1.7rem; }
+    .g-senebi { background: #0f2440 !important; color: #58a6ff !important; text-align: center; }
+    .g-pant { background: #13263a !important; color: #74acdf !important; text-align: center; }
+    .g-a3 { background: #2e2408 !important; color: #f6b40e !important; text-align: center; }
+    .g-neto { background: #1c2333 !important; color: #e6edf3 !important; text-align: center; }
+    .g-flujo { background: #1b1f26 !important; color: #8b949e !important; text-align: center; }
+    .g-plain { background: #161b22 !important; color: #8b949e !important; }
+    .h-senebi { background: #0f2440 !important; color: #58a6ff !important; }
+    .h-pant { background: #13263a !important; color: #74acdf !important; }
+    .h-a3 { background: #2e2408 !important; color: #f6b40e !important; }
+    .h-neto { background: #1c2333 !important; color: #e6edf3 !important; }
+    .h-flujo { background: #1b1f26 !important; color: #8b949e !important; }
+    .col-sticky { position: sticky; z-index: 2; }
+    .dash-table thead .col-sticky { z-index: 5; }
+    .col-num { left: 0; min-width: 2rem; text-align: center; }
+    .col-ticker { left: 2rem; min-width: 5.5rem; }
+    .estado-ok { color: #3fb950 !important; background: #12321d !important; font-weight: 700; text-align: center; }
+    .estado-des { color: #f85149 !important; background: #3d1418 !important; font-weight: 700; text-align: center; }
+    .estado-rev { color: #d29922 !important; background: #3a2d0b !important; font-weight: 700; text-align: center; }
+    .neto-off { color: #f85149; font-weight: 700; }
+    .flujo-pos { color: #3fb950; }
+    .flujo-neg { color: #f85149; }
+    .alerta { color: #f85149; font-style: italic; text-align: left; }
     .equiv-table { width: 100%; border-collapse: collapse; margin-top: 0.4rem; }
     .equiv-table th, .equiv-table td { padding: 0.3rem 0.35rem; text-align: left; }
     .equiv-table input[type="text"] { width: 100%; }
@@ -67,7 +140,7 @@
     .cp-group-row th { text-align: center; }
     @media (max-width: 900px) {
       .cp-layout { grid-template-columns: 1fr; }
-      .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -115,37 +188,6 @@
               <div class="form-actions">
                 <button type="button" id="btn-procesar">Procesar</button>
               </div>
-
-              <div class="result-wrap">
-                <div id="kpi-row" class="kpi-row" style="display:none;">
-                  <div class="kpi"><span class="kpi-label">Tickers</span><span class="kpi-value" id="kpi-tickers">0</span></div>
-                  <div class="kpi"><span class="kpi-label">Descalces</span><span class="kpi-value" id="kpi-descalces">0</span></div>
-                  <div class="kpi"><span class="kpi-label">Revisar plazos</span><span class="kpi-value" id="kpi-plazos">0</span></div>
-                  <div class="kpi"><span class="kpi-label">Ops SENEBI</span><span class="kpi-value" id="kpi-senebi">0</span></div>
-                  <div class="kpi"><span class="kpi-label">Ops pantalla</span><span class="kpi-value" id="kpi-pantalla">0</span></div>
-                  <div class="kpi"><span class="kpi-label">Ops A3</span><span class="kpi-value" id="kpi-a3">0</span></div>
-                </div>
-                <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
-                <div id="result-table-wrap" class="result-table-wrap" style="display: none;"></div>
-                <div id="result-actions" class="result-actions" style="display: none;">
-                  <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
-                  <button type="button" id="btn-exportar-excel" class="btn btn-icon btn-excel" title="Exportar a Excel" aria-label="Exportar a Excel"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-                </div>
-                <div id="detalles-wrap" style="display:none;">
-                  <details class="supuestos" open>
-                    <summary>Detalle BYMA (SENEBI)</summary>
-                    <div id="detalle-byma" class="result-table-wrap"></div>
-                  </details>
-                  <details class="supuestos">
-                    <summary>Detalle pantalla</summary>
-                    <div id="detalle-pantalla" class="result-table-wrap"></div>
-                  </details>
-                  <details class="supuestos">
-                    <summary>Detalle A3</summary>
-                    <div id="detalle-a3" class="result-table-wrap"></div>
-                  </details>
-                </div>
-              </div>
             </div>
 
             <aside class="cp-col-config">
@@ -170,6 +212,15 @@
             </aside>
           </div>
         </form>
+
+        <div class="result-wrap">
+          <div id="resultado" class="result-block empty" role="status" aria-live="polite">Resultados aparecerán aquí.</div>
+          <div id="result-table-wrap" class="result-table-wrap" style="display: none;"></div>
+          <div id="result-actions" class="result-actions" style="display: none;">
+            <button type="button" id="btn-copiar" class="btn btn-icon" title="Copiar" aria-label="Copiar"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button type="button" id="btn-exportar-excel" class="btn btn-icon btn-excel" title="Exportar a Excel" aria-label="Exportar a Excel"><svg class="icon-svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+          </div>
+        </div>
       </section>
     </main>
 
