@@ -806,6 +806,52 @@ input[type="file"] {
   color: var(--text-primary);
 }
 
+.canje-chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.canje-chart-head .chart-title {
+  margin: 0;
+}
+
+.canje-range-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.canje-range-label select {
+  margin: 0;
+  min-width: 8rem;
+}
+
+.chart-sources {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0.75rem 0 0;
+}
+
+.result-table th.tc-row-action,
+.result-table td.tc-row-action {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+  padding-right: 0;
+}
+
+.result-table .btn-table {
+  padding: 0.28rem 0.75rem;
+  font-size: 0.8rem;
+  width: auto;
+}
+
 .form-grid-arbitraje .form-actions {
   align-items: flex-end;
 }

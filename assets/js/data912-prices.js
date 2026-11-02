@@ -127,6 +127,41 @@
     return v != null && isFinite(n) && n !== 0 ? n : null;
   }
 
+  /** Canje = (CCL / MEP − 1) × 100. Misma referencia AL30 que MEP y CCL. */
+  function canjePct(ccl, mep) {
+    var c = Number(ccl);
+    var m = Number(mep);
+    if (ccl == null || mep == null || !isFinite(c) || !isFinite(m) || m === 0) return null;
+    return (c / m - 1) * 100;
+  }
+
+  function ratioMap(numMap, denMap) {
+    var out = {};
+    for (var date in numMap) {
+      if (!Object.prototype.hasOwnProperty.call(numMap, date)) continue;
+      if (denMap[date] == null || denMap[date] === 0) continue;
+      out[date] = numMap[date] / denMap[date];
+    }
+    return out;
+  }
+
+  function canjeSeriesFromMaps(mepMap, cclMap) {
+    var dates = [];
+    for (var date in mepMap) {
+      if (!Object.prototype.hasOwnProperty.call(mepMap, date)) continue;
+      if (cclMap[date] == null) continue;
+      dates.push(date);
+    }
+    dates.sort();
+    var out = [];
+    for (var i = 0; i < dates.length; i++) {
+      var pct = canjePct(cclMap[dates[i]], mepMap[dates[i]]);
+      if (pct == null) continue;
+      out.push({ date: dates[i], pct: pct });
+    }
+    return out;
+  }
+
   function cross(ars, usd) {
     if (!ars || !usd) return null;
     var bidN = finiteOrNull(ars.px_bid);
@@ -252,6 +287,10 @@
     return !!((fx.mep && fx.mep.date && fx.mep.close != null) || (fx.ccl && fx.ccl.date && fx.ccl.close != null));
   }
 
+  function fxHasCanje(fx) {
+    return !!(fx && Array.isArray(fx.canje) && fx.canje.length);
+  }
+
   function quoteOrNull(q) {
     if (!q) return null;
     if (q.bid == null && q.ask == null && q.last == null) return null;
@@ -281,23 +320,30 @@
     });
   }
 
+  function emptyFx() {
+    return { resolved: false, mep: null, ccl: null, canje: [] };
+  }
+
   function loadFxCloses() {
     var cache = getCache();
-    if (fxUseful(cache.fx)) return Promise.resolve(cache.fx);
+    if (fxUseful(cache.fx) && fxHasCanje(cache.fx)) return Promise.resolve(cache.fx);
     return Promise.all(["AL30", "AL30D", "AL30C"].map(function (symbol) {
       return fetchHistory("bonds", symbol);
     })).then(function (series) {
       if (series.some(function (res) { return !res || res.status === "error"; })) {
-        return { resolved: false, mep: null, ccl: null };
+        return fxUseful(cache.fx) ? cache.fx : emptyFx();
       }
       var today = getCache().day;
       var al30 = barsByDate(series[0].body, today);
       var al30d = barsByDate(series[1].body, today);
       var al30c = barsByDate(series[2].body, today);
+      var mepMap = ratioMap(al30, al30d);
+      var cclMap = ratioMap(al30, al30c);
       var fx = {
         resolved: true,
         mep: latestShared(al30, al30d),
-        ccl: latestShared(al30, al30c)
+        ccl: latestShared(al30, al30c),
+        canje: canjeSeriesFromMaps(mepMap, cclMap)
       };
       if (fxUseful(fx)) {
         getCache().fx = fx;
@@ -305,7 +351,7 @@
       }
       return fx;
     }).catch(function () {
-      return { resolved: false, mep: null, ccl: null };
+      return fxUseful(getCache().fx) ? getCache().fx : emptyFx();
     });
   }
 
@@ -330,11 +376,32 @@
     ]).then(function (pair) {
       var by = indexBySymbol(pair[0]);
       var fx = pair[2] || {};
+      var mepLive = quoteOrNull(cross(by.AL30, by.AL30D)) || mepFromPanel(pair[1]);
+      var cclLive = quoteOrNull(cross(by.AL30, by.AL30C));
+      var canjeLive = quoteOrNull({
+        bid: canjePct(cclLive && cclLive.bid, mepLive && mepLive.bid),
+        ask: canjePct(cclLive && cclLive.ask, mepLive && mepLive.ask),
+        last: canjePct(cclLive && cclLive.last, mepLive && mepLive.last)
+      });
+      var canjeClose = null;
+      var series = Array.isArray(fx.canje) ? fx.canje : [];
+      if (series.length) {
+        var lastBar = series[series.length - 1];
+        canjeClose = { date: lastBar.date, pct: lastBar.pct, close: lastBar.pct };
+      } else if (fx.mep && fx.ccl) {
+        var pct = canjePct(fx.ccl.close, fx.mep.close);
+        if (pct != null) {
+          canjeClose = { date: fx.ccl.date || fx.mep.date, pct: pct, close: pct };
+        }
+      }
       return {
-        mepLive: quoteOrNull(cross(by.AL30, by.AL30D)) || mepFromPanel(pair[1]),
-        cclLive: quoteOrNull(cross(by.AL30, by.AL30C)),
+        mepLive: mepLive,
+        cclLive: cclLive,
         mepClose: fx.mep || null,
-        cclClose: fx.ccl || null
+        cclClose: fx.ccl || null,
+        canjeLive: canjeLive,
+        canjeClose: canjeClose,
+        canjeSeries: series
       };
     });
   }
@@ -367,6 +434,7 @@
     priorBar: priorBar,
     latestShared: latestShared,
     cross: cross,
+    canjePct: canjePct,
     loadPriorCloses: loadPriorCloses,
     loadExchangeRates: loadExchangeRates,
     lookupPrice: lookupPrice
