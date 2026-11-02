@@ -7,8 +7,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png">
   <title>Tipos de cambio | ALLINARG</title>
-  <meta name="description" content="Dólar MEP y CCL. Último operado con demora y cierre del día hábil anterior, con AL30 como referencia.">
+  <meta name="description" content="Dólar MEP, CCL y canje (CCL/MEP) en porcentaje. Último operado con demora y cierre del día hábil anterior, con AL30 como referencia.">
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body class="page-interna">
   <div class="ticker-wrap ticker-wrap-delayed" aria-label="Último operado con demora">
@@ -29,7 +30,7 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Tipos de cambio</h2>
-        <p class="tool-desc">Dólar MEP y CCL, con AL30 de referencia. Bid, ask y último son de hoy y vienen con demora. El cierre es el del día hábil anterior y no cambia durante la rueda.</p>
+        <p class="tool-desc">Dólar MEP, CCL y canje, con AL30 de referencia. El canje es (CCL / MEP − 1) y se muestra en porcentaje. Bid, ask y último son de hoy y vienen con demora. El cierre es el del día hábil anterior y no cambia durante la rueda.</p>
         <p id="tc-source" class="market-source" hidden></p>
         <p id="tc-stale" class="market-stale" hidden></p>
 
@@ -53,6 +54,21 @@
               </thead>
               <tbody id="tc-body"></tbody>
             </table>
+            <div id="canje-chart-block" class="chart-wrap" hidden>
+              <div class="canje-chart-head">
+                <p class="chart-title">Canje CCL / MEP (%)</p>
+                <label class="canje-range-label" for="canje-rango">Período
+                  <select id="canje-rango" aria-label="Período del gráfico de canje">
+                    <option value="3mo">3 meses</option>
+                    <option value="6mo" selected>6 meses</option>
+                    <option value="1y">1 año</option>
+                    <option value="2y">2 años</option>
+                  </select>
+                </label>
+              </div>
+              <canvas id="chart-canje" aria-label="Gráfico del canje CCL sobre MEP en porcentaje"></canvas>
+              <p class="chart-sources">Histórico diario: MEP = AL30/AL30D, CCL = AL30/AL30C (Data912). El último punto de hoy, si está, es el último operado con demora.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -66,14 +82,28 @@
     </footer>
   </div>
 
-  <script src="assets/js/data912-prices.js?v=2"></script>
+  <script src="assets/js/data912-prices.js?v=3"></script>
   <script>
     (function () {
       "use strict";
       function $(id) { return document.getElementById(id); }
 
+      var canjeChartInstance = null;
+      var canjeSeriesAll = [];
+      var canjeLivePct = null;
+
       function format(n) {
         return n != null && !isNaN(n) ? n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+      }
+
+      function formatPct(n) {
+        if (n == null || isNaN(n)) return "—";
+        return n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " %";
+      }
+
+      function daysForRange(range) {
+        var map = { "3mo": 92, "6mo": 183, "1y": 365, "2y": 730 };
+        return map[range] || 183;
       }
 
       function todayYmd() {
@@ -209,6 +239,95 @@
         $("tc-wrap").style.display = "none";
         $("tc-source").hidden = true;
         $("tc-stale").hidden = true;
+        var chartBlock = $("canje-chart-block");
+        if (chartBlock) chartBlock.hidden = true;
+      }
+
+      function filterCanjeSeries(series, range, livePct, today) {
+        var maxDays = daysForRange(range);
+        var cutoff = ymdFromUtc(parseUtc(today) - maxDays * 86400000);
+        var points = [];
+        for (var i = 0; i < series.length; i++) {
+          var p = series[i];
+          if (!p || !p.date || p.date < cutoff || p.pct == null || isNaN(p.pct)) continue;
+          points.push(p);
+        }
+        if (livePct != null && !isNaN(livePct)) {
+          var last = points.length ? points[points.length - 1] : null;
+          if (!last || last.date < today) points.push({ date: today, pct: livePct });
+          else if (last.date === today) last.pct = livePct;
+        }
+        return points;
+      }
+
+      function drawCanjeChart(series, range, livePct, today) {
+        var block = $("canje-chart-block");
+        var canvas = $("chart-canje");
+        if (!block || !canvas || typeof Chart === "undefined") return;
+        var points = filterCanjeSeries(series, range, livePct, today);
+        if (points.length < 2) {
+          block.hidden = true;
+          if (canjeChartInstance) {
+            canjeChartInstance.destroy();
+            canjeChartInstance = null;
+          }
+          return;
+        }
+        block.hidden = false;
+        var labels = points.map(function (p) {
+          return new Date(p.date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "2-digit" });
+        });
+        var values = points.map(function (p) { return p.pct; });
+        if (canjeChartInstance) canjeChartInstance.destroy();
+        canjeChartInstance = new Chart(canvas.getContext("2d"), {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: "Canje %",
+              data: values,
+              borderColor: "rgba(88, 166, 255, 0.9)",
+              backgroundColor: "rgba(88, 166, 255, 0.15)",
+              fill: true,
+              tension: 0.2,
+              pointRadius: 0,
+              pointHoverRadius: 4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            aspectRatio: 2,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: "index",
+                intersect: false,
+                callbacks: {
+                  label: function (ctx) {
+                    var v = ctx.raw;
+                    return "Canje: " + (v != null ? Number(v).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " %" : "—");
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                grid: { color: "rgba(255,255,255,0.06)" },
+                ticks: { color: "#8b949e", maxTicksLimit: 12 }
+              },
+              y: {
+                grid: { color: "rgba(255,255,255,0.06)" },
+                ticks: {
+                  color: "#8b949e",
+                  callback: function (v) {
+                    return Number(v).toLocaleString("es-AR", { maximumFractionDigits: 1 }) + " %";
+                  }
+                }
+              }
+            }
+          }
+        });
       }
 
       function run() {
@@ -219,6 +338,8 @@
         $("tc-wrap").style.display = "none";
         $("tc-source").hidden = true;
         $("tc-stale").hidden = true;
+        var chartBlock = $("canje-chart-block");
+        if (chartBlock) chartBlock.hidden = true;
 
         if (!window.Data912Prices || typeof window.Data912Prices.loadExchangeRates !== "function") {
           showError("No se pudo cargar el módulo de precios Data912.");
@@ -238,6 +359,11 @@
           if (hasLive(cclLive) || (fx.cclClose && fx.cclClose.close != null)) {
             rows.push({ tipo: "Dólar CCL", live: cclLive, close: fx.cclClose });
           }
+          var canjeLive = fx.canjeLive;
+          var canjeClose = fx.canjeClose;
+          if (hasLive(canjeLive) || (canjeClose && canjeClose.pct != null)) {
+            rows.push({ tipo: "Canje CCL/MEP", live: canjeLive, close: canjeClose, isPct: true });
+          }
           if (!rows.length) {
             showError("Data912 no devolvió MEP ni CCL. Probá de nuevo en unos segundos.");
             return;
@@ -252,7 +378,7 @@
           $("tc-close-head").textContent = sameDay ? ("Cierre " + sameDay) : "Cierre";
 
           var source = $("tc-source");
-          source.textContent = "Fuente: Data912 · MEP = AL30/AL30D · CCL = AL30/AL30C. Último: con demora (caché de unas 2 horas, no es tiempo real). "
+          source.textContent = "Fuente: Data912 · MEP = AL30/AL30D · CCL = AL30/AL30C · Canje = (CCL / MEP − 1). Último: con demora (caché de unas 2 horas, no es tiempo real). "
             + (sameDay
               ? "Cierre " + sameDay + ": histórico diario de esa rueda. No se vuelve a consultar hasta el día siguiente."
               : (closeDates.length
@@ -278,14 +404,21 @@
           rows.forEach(function (r) {
             var live = r.live || {};
             var closeText = "—";
-            if (r.close && r.close.close != null) {
-              closeText = "$ " + format(r.close.close);
+            var fmt = r.isPct ? formatPct : function (n) { return n != null && !isNaN(n) ? "$ " + format(n) : "—"; };
+            var closeVal = r.close && (r.isPct ? r.close.pct : r.close.close);
+            if (closeVal != null) {
+              closeText = fmt(closeVal);
               if (!sameDay && r.close.date) closeText += " (" + formatDia(r.close.date) + ")";
             }
             var tr = document.createElement("tr");
-            tr.innerHTML = "<td>" + r.tipo + "</td><td>$ " + format(live.bid) + "</td><td>$ " + format(live.ask) + "</td><td>$ " + format(live.last) + "</td><td>" + closeText + "</td>";
+            tr.innerHTML = "<td>" + r.tipo + "</td><td>" + fmt(live.bid) + "</td><td>" + fmt(live.ask) + "</td><td>" + fmt(live.last) + "</td><td>" + closeText + "</td>";
             tbody.appendChild(tr);
           });
+
+          canjeSeriesAll = fx.canjeSeries || [];
+          canjeLivePct = canjeLive && canjeLive.last != null ? canjeLive.last : null;
+          var rangoEl = $("canje-rango");
+          drawCanjeChart(canjeSeriesAll, rangoEl ? rangoEl.value : "6mo", canjeLivePct, todayYmd());
         }).catch(function () {
           showError("No se pudieron cargar los tipos de cambio. Revisá la conexión e intentá de nuevo.");
         });
@@ -296,6 +429,12 @@
       if (btnTc) btnTc.addEventListener("click", run);
       var btnRetry = $("btn-reintentar");
       if (btnRetry) btnRetry.addEventListener("click", run);
+      var rangoEl = $("canje-rango");
+      if (rangoEl) {
+        rangoEl.addEventListener("change", function () {
+          drawCanjeChart(canjeSeriesAll, rangoEl.value, canjeLivePct, todayYmd());
+        });
+      }
     })();
   </script>
   <script src="assets/ticker.js"></script>
