@@ -30,7 +30,6 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Tipos de cambio</h2>
-        <p class="tool-desc">Dólar MEP, CCL y canje, con AL30 de referencia. El canje es (CCL / MEP − 1) y se muestra en porcentaje. Bid, ask y último son de hoy y vienen con demora. El cierre es el del día hábil anterior y no cambia durante la rueda.</p>
         <p id="tc-source" class="market-source" hidden></p>
         <p id="tc-stale" class="market-stale" hidden></p>
 
@@ -68,7 +67,6 @@
                 </label>
               </div>
               <canvas id="chart-canje" aria-label="Gráfico del canje CCL sobre MEP en porcentaje"></canvas>
-              <p class="chart-sources">Histórico diario: MEP = AL30/AL30D, CCL = AL30/AL30C (Data912). El último punto de hoy, si está, es el último operado con demora.</p>
             </div>
           </div>
         </div>
@@ -401,12 +399,7 @@
           $("tc-close-head").textContent = sameDay ? ("Cierre " + sameDay) : "Cierre";
 
           var source = $("tc-source");
-          source.textContent = "Fuente: Data912 · MEP = AL30/AL30D · CCL = AL30/AL30C · Canje = (CCL / MEP − 1). Último: con demora (caché de unas 2 horas, no es tiempo real). "
-            + (sameDay
-              ? "Cierre " + sameDay + ": histórico diario de esa rueda. No se vuelve a consultar hasta el día siguiente."
-              : (closeDates.length
-                ? "Cierre: histórico diario. No se vuelve a consultar hasta el día siguiente."
-                : "No se pudo leer el cierre histórico."));
+          source.textContent = "Fuente: Data912 · MEP = AL30/AL30D · CCL = AL30/AL30C · Canje = (CCL / MEP − 1).";
           source.hidden = false;
 
           var oldest = closeDates.length ? closeDates[0] : null;
