@@ -59,6 +59,7 @@
                 <p class="chart-title">Canje CCL / MEP (%)</p>
                 <label class="canje-range-label" for="canje-rango">Período
                   <select id="canje-rango" aria-label="Período del gráfico de canje">
+                    <option value="1mo">1 mes</option>
                     <option value="3mo">3 meses</option>
                     <option value="6mo" selected>6 meses</option>
                     <option value="1y">1 año</option>
@@ -102,7 +103,7 @@
       }
 
       function daysForRange(range) {
-        var map = { "3mo": 92, "6mo": 183, "1y": 365, "2y": 730 };
+        var map = { "1mo": 31, "3mo": 92, "6mo": 183, "1y": 365, "2y": 730 };
         return map[range] || 183;
       }
 
