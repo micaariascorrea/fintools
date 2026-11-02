@@ -50,6 +50,7 @@
                   <th>Ask</th>
                   <th>Último</th>
                   <th id="tc-close-head">Cierre</th>
+                  <th class="tc-row-action"></th>
                 </tr>
               </thead>
               <tbody id="tc-body"></tbody>
@@ -91,6 +92,7 @@
       var canjeChartInstance = null;
       var canjeSeriesAll = [];
       var canjeLivePct = null;
+      var canjeChartOpen = false;
 
       function format(n) {
         return n != null && !isNaN(n) ? n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
@@ -260,10 +262,31 @@
         return points;
       }
 
+      function canjeChartReady() {
+        return filterCanjeSeries(canjeSeriesAll, "2y", canjeLivePct, todayYmd()).length >= 2;
+      }
+
+      function setCanjeChartOpen(open) {
+        canjeChartOpen = !!open;
+        var btn = $("btn-graficar-canje");
+        if (btn) btn.setAttribute("aria-expanded", canjeChartOpen ? "true" : "false");
+        if (!canjeChartOpen) {
+          var block = $("canje-chart-block");
+          if (block) block.hidden = true;
+          return;
+        }
+        var rangoEl = $("canje-rango");
+        drawCanjeChart(canjeSeriesAll, rangoEl ? rangoEl.value : "6mo", canjeLivePct, todayYmd());
+      }
+
       function drawCanjeChart(series, range, livePct, today) {
         var block = $("canje-chart-block");
         var canvas = $("chart-canje");
         if (!block || !canvas || typeof Chart === "undefined") return;
+        if (!canjeChartOpen) {
+          block.hidden = true;
+          return;
+        }
         var points = filterCanjeSeries(series, range, livePct, today);
         if (points.length < 2) {
           block.hidden = true;
@@ -410,15 +433,30 @@
               closeText = fmt(closeVal);
               if (!sameDay && r.close.date) closeText += " (" + formatDia(r.close.date) + ")";
             }
+            var action = "";
+            if (r.isPct) {
+              action = "<td class=\"tc-row-action\"><button type=\"button\" id=\"btn-graficar-canje\" class=\"btn btn-secondary btn-table\" aria-expanded=\"false\" aria-controls=\"canje-chart-block\">Graficar</button></td>";
+            } else {
+              action = "<td class=\"tc-row-action\"></td>";
+            }
             var tr = document.createElement("tr");
-            tr.innerHTML = "<td>" + r.tipo + "</td><td>" + fmt(live.bid) + "</td><td>" + fmt(live.ask) + "</td><td>" + fmt(live.last) + "</td><td>" + closeText + "</td>";
+            tr.innerHTML = "<td>" + r.tipo + "</td><td>" + fmt(live.bid) + "</td><td>" + fmt(live.ask) + "</td><td>" + fmt(live.last) + "</td><td>" + closeText + "</td>" + action;
             tbody.appendChild(tr);
           });
 
           canjeSeriesAll = fx.canjeSeries || [];
           canjeLivePct = canjeLive && canjeLive.last != null ? canjeLive.last : null;
-          var rangoEl = $("canje-rango");
-          drawCanjeChart(canjeSeriesAll, rangoEl ? rangoEl.value : "6mo", canjeLivePct, todayYmd());
+          var btnGraf = $("btn-graficar-canje");
+          if (btnGraf) {
+            if (!canjeChartReady()) {
+              btnGraf.disabled = true;
+              btnGraf.title = "No hay suficiente histórico para graficar.";
+            }
+            btnGraf.addEventListener("click", function () {
+              setCanjeChartOpen(!canjeChartOpen);
+            });
+          }
+          setCanjeChartOpen(canjeChartOpen);
         }).catch(function () {
           showError("No se pudieron cargar los tipos de cambio. Revisá la conexión e intentá de nuevo.");
         });

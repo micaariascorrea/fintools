@@ -838,6 +838,20 @@ input[type="file"] {
   margin: 0.75rem 0 0;
 }
 
+.result-table th.tc-row-action,
+.result-table td.tc-row-action {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+  padding-right: 0;
+}
+
+.result-table .btn-table {
+  padding: 0.28rem 0.75rem;
+  font-size: 0.8rem;
+  width: auto;
+}
+
 .form-grid-arbitraje .form-actions {
   align-items: flex-end;
 }
