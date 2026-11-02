@@ -226,6 +226,49 @@
         return d;
       }
 
+      /* Semana lunes–domingo (Argentina). */
+      function weekMonday(ymdStr) {
+        var wd = weekday(ymdStr);
+        var offset = wd === 0 ? -6 : 1 - wd;
+        return addDays(ymdStr, offset);
+      }
+
+      function lastBusinessDayOfWeek(mondayYmd) {
+        var last = null;
+        for (var i = 0; i < 7; i++) {
+          var d = addDays(mondayYmd, i);
+          if (!isMarketClosed(d)) last = d;
+        }
+        return last;
+      }
+
+      function weeklyTickDates(points) {
+        var lastIdxByWeek = {};
+        for (var i = 0; i < points.length; i++) {
+          lastIdxByWeek[weekMonday(points[i].date)] = i;
+        }
+        var set = {};
+        Object.keys(lastIdxByWeek).forEach(function (monday) {
+          var lbd = lastBusinessDayOfWeek(monday);
+          if (lbd) {
+            for (var j = 0; j < points.length; j++) {
+              if (points[j].date === lbd) {
+                set[lbd] = true;
+                return;
+              }
+            }
+          }
+          set[points[lastIdxByWeek[monday]].date] = true;
+        });
+        return set;
+      }
+
+      function formatFull(ymd) {
+        var bits = ymd.split("-");
+        if (bits.length !== 3) return ymd;
+        return bits[2] + "/" + bits[1] + "/" + bits[0];
+      }
+
       function closeIsStale(closeDate, today) {
         if (!closeDate || closeDate >= today) return false;
         return closeDate < previousBusinessDay(today);
@@ -295,9 +338,8 @@
           return;
         }
         block.hidden = false;
-        var labels = points.map(function (p) {
-          return new Date(p.date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "2-digit" });
-        });
+        var tickDates = weeklyTickDates(points);
+        var labels = points.map(function (p) { return p.date; });
         var values = points.map(function (p) { return p.pct; });
         if (canjeChartInstance) canjeChartInstance.destroy();
         canjeChartInstance = new Chart(canvas.getContext("2d"), {
@@ -325,6 +367,11 @@
                 mode: "index",
                 intersect: false,
                 callbacks: {
+                  title: function (items) {
+                    if (!items.length) return "";
+                    var ymd = points[items[0].dataIndex] && points[items[0].dataIndex].date;
+                    return ymd ? formatFull(ymd) : "";
+                  },
                   label: function (ctx) {
                     var v = ctx.raw;
                     return "Canje: " + (v != null ? Number(v).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " %" : "—");
@@ -335,7 +382,24 @@
             scales: {
               x: {
                 grid: { color: "rgba(255,255,255,0.06)" },
-                ticks: { color: "#8b949e", maxTicksLimit: 12 }
+                afterBuildTicks: function (axis) {
+                  axis.ticks = axis.ticks.filter(function (tick) {
+                    var ymd = axis.getLabelForValue(tick.value);
+                    return !!tickDates[ymd];
+                  });
+                },
+                ticks: {
+                  color: "#8b949e",
+                  autoSkip: true,
+                  autoSkipPadding: 8,
+                  maxRotation: 0,
+                  minRotation: 0,
+                  callback: function (value) {
+                    var ymd = this.getLabelForValue(value);
+                    if (!tickDates[ymd]) return "";
+                    return formatDia(ymd);
+                  }
+                }
               },
               y: {
                 grid: { color: "rgba(255,255,255,0.06)" },
