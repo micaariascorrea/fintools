@@ -1,7 +1,8 @@
 /**
  * Control de posiciones BYMA (SENEBI + pantalla) vs A3.
  * Port of Control_Posiciones_BYMA_A3 dashboard / Detalle_* sheets.
- * Everything runs in memory; nothing is persisted.
+ * Workbooks stay in memory; ticker equivalencias are site-preloaded
+ * in assets/js/equivalencias-tickers.js (not session-only).
  */
 (function (root) {
   "use strict";
@@ -47,6 +48,12 @@
     "Numeric Trade ID": ["NumericTradeID", "Trade ID"]
   };
 
+  function siteEquivalencias() {
+    var src = root.CP_EQUIVALENCIAS_DEFAULT;
+    if (src && typeof src === "object") return src;
+    return { TXS7X: "TZXS7", S2N6X: "S13N6" };
+  }
+
   function defaultConfig() {
     return {
       agent: "",
@@ -57,7 +64,7 @@
       pantallaExecType: "Trade",
       caucionSegmento: "U",
       ownAccounts: [],
-      equivalencias: { TXS7X: "TZXS7", S2N6X: "S13N6" }
+      equivalencias: Object.assign({}, siteEquivalencias())
     };
   }
 
@@ -1213,13 +1220,14 @@
   }
 
   function initEquiv() {
-    var def = (CP && CP.defaultConfig && CP.defaultConfig().equivalencias) || {
-      TXS7X: "TZXS7",
-      S2N6X: "S13N6"
-    };
-    Object.keys(def).forEach(function (k) {
-      addEquivRow(k, def[k]);
-    });
+    var def = (CP && CP.defaultConfig && CP.defaultConfig().equivalencias) || {};
+    var n = Object.keys(def).length;
+    var hint = $("equiv-preload-hint");
+    if (hint) {
+      hint.textContent =
+        n.toLocaleString("es-AR") +
+        " equivalencias precargadas en el sitio (código mercado → ticker unificado). Agregá extras abajo; si repetís un código, vale el de la tabla.";
+    }
     var addBtn = $("btn-add-equiv");
     if (addBtn) addBtn.addEventListener("click", function () {
       addEquivRow("", "");
