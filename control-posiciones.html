@@ -167,7 +167,7 @@
     <main class="page-content">
       <section class="form-block">
         <h2 class="tool-title">Control de posiciones</h2>
-        <p class="tool-desc">Cruce de posiciones en títulos entre BYMA (SENEBI + pantalla) y A3.</p>
+        <p class="tool-desc">Cruce de posiciones en títulos entre BYMA (SENEBI + pantalla) y A3 (Blotter Privado).</p>
         <p class="privacy-note"><strong>Nada se guarda.</strong> Los archivos se leen solo en este navegador: no hay envío a un servidor, ni localStorage de carteras, operaciones o resultados. Al recargar o cerrar la pestaña, el control desaparece.</p>
         <div class="instructivo-actions">
           <a class="btn" href="assets/instructivo-control-posiciones.pdf" target="_blank" rel="noopener">Instructivo</a>
@@ -185,8 +185,9 @@
                 <input type="file" id="file-pantalla" name="pantalla" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
               </div>
               <div class="form-group">
-                <label for="file-a3">A3</label>
-                <input type="file" id="file-a3" name="a3" accept=".csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                <label for="file-a3">A3 · Blotter Privado</label>
+                <input type="file" id="file-a3" name="a3" accept=".csv,text/csv,.txt,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                <span class="form-hint">CSV de A3 (Blotter Privado; el archivo suele llamarse …_Blotter_Privado.csv). El instrumento viene con plazo (TZXS7/24hs, TZXS7/CI). Se lee solo en este navegador.</span>
               </div>
               <div class="form-actions">
                 <button type="button" id="btn-procesar">Procesar</button>
@@ -200,9 +201,9 @@
                 <span class="form-hint">Cuentan las puntas donde vendedor o comprador es este agente y hay cartera.</span>
               </div>
               <div class="form-group">
-                <label for="comitentes">Comitentes de cartera propia (pantalla) <span class="req" aria-hidden="true">*</span></label>
+                <label for="comitentes">Comitentes de cartera propia <span class="req" aria-hidden="true">*</span></label>
                 <input type="text" id="comitentes" name="comitentes" value="" autocomplete="off" required>
-                <span class="form-hint">Sólo las ops de pantalla de estas cuentas. Separá por coma o espacio.</span>
+                <span class="form-hint">Pantalla: Client ID. A3 Blotter Privado: Cta Compra / Cta Venta. Separá por coma o espacio.</span>
               </div>
               <div class="form-group">
                 <label>Equivalencias de códigos</label>

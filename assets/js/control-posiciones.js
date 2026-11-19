@@ -1,6 +1,8 @@
 /**
  * Control de posiciones BYMA (SENEBI + pantalla) vs A3.
  * Port of Control_Posiciones_BYMA_A3 dashboard / Detalle_* sheets.
+ * A3 primary input is the Blotter Privado CSV (ticker/plazo in Instrumento).
+ * Legacy OperacionesPropiasHoy Excel/CSV still parses if those headers match.
  * Workbooks stay in memory; ticker equivalencias are site-preloaded
  * in assets/js/equivalencias-tickers.js (not session-only).
  */
@@ -31,6 +33,14 @@
     { key: "estado", header: "Estado" }
   ];
 
+  var A3_BLOTTER_FIELDS = [
+    { key: "instrumento", header: "Instrumento" },
+    { key: "operacion", header: "Operación" },
+    { key: "cantidad", header: "Cantidad" },
+    { key: "ctaCompra", header: "Cta Compra" },
+    { key: "ctaVenta", header: "Cta Venta" }
+  ];
+
   var PANTALLA_FIELDS = [
     { key: "tradeId", header: "Numeric Trade ID" },
     { key: "clientId", header: "Client ID" },
@@ -45,7 +55,12 @@
     "Estado operacion": ["Estado operación", "Estado Operacion"],
     "Número de secuencia": ["Numero de secuencia", "Nro de secuencia", "N° de secuencia"],
     "Posicion": ["Posición"],
-    "Numeric Trade ID": ["NumericTradeID", "Trade ID"]
+    "Numeric Trade ID": ["NumericTradeID", "Trade ID"],
+    "Operación": ["Operacion"],
+    "Cta Compra": ["Cta. Compra", "Cuenta Compra", "Cuenta compra"],
+    "Cta Venta": ["Cta. Venta", "Cuenta Venta", "Cuenta venta"],
+    "IdNegocio": ["Id Negocio", "ID Negocio"],
+    "IdOrdenServidor": ["Id Orden Servidor", "IdOrden"]
   };
 
   function siteEquivalencias() {
@@ -188,6 +203,42 @@
     return sp === -1 ? p : p.slice(0, sp);
   }
 
+  function isA3BlotterHeaders(headers) {
+    return !!(findCol(headers || [], "Instrumento") && findCol(headers || [], "Operación"));
+  }
+
+  function classifyBlotterPlazo(raw) {
+    var u = stripAccents(txt(raw))
+      .toUpperCase()
+      .replace(/[\s.\-_]/g, "");
+    if (!u) return "OTRO";
+    if (u === "CI" || u === "CONTADOINMEDIATO" || u === "CONTADO") return "CI";
+    if (u === "24HS" || u === "24H" || u === "24HRS" || u === "24") return "24HS";
+    return "OTRO";
+  }
+
+  function parseA3BlotterInstrument(raw) {
+    var p = txt(raw);
+    if (!p) return { tickerRaw: "", plazo: "OTRO" };
+    var slash = p.lastIndexOf("/");
+    if (slash > 0) {
+      return {
+        tickerRaw: p.slice(0, slash).trim(),
+        plazo: classifyBlotterPlazo(p.slice(slash + 1))
+      };
+    }
+    return { tickerRaw: p, plazo: "OTRO" };
+  }
+
+  function blotterAccountOk(account, config) {
+    var acc = txt(account);
+    if (!acc || acc === "-") return false;
+    if (config.a3SoloPropia === false) return true;
+    var own = ownSet(config.ownAccounts);
+    if (!Object.keys(own).length) return true;
+    return !!own[acc];
+  }
+
   function processByma(rows, headers, config) {
     var cols = mapCols(headers || [], BYMA_FIELDS);
     var details = [];
@@ -236,7 +287,7 @@
     return { details: details, missing: cols.missing };
   }
 
-  function processA3(rows, headers, config) {
+  function processA3Legacy(rows, headers, config) {
     var cols = mapCols(headers || [], A3_FIELDS);
     var details = [];
     var estadoOk = txt(config.a3Estado).toUpperCase();
@@ -283,7 +334,66 @@
         motivo: motivo
       });
     }
-    return { details: details, missing: cols.missing };
+    return { details: details, missing: cols.missing, format: "operaciones-propias" };
+  }
+
+  function processA3Blotter(rows, headers, config) {
+    var cols = mapCols(headers || [], A3_BLOTTER_FIELDS);
+    var colIdNeg = findCol(headers || [], "IdNegocio");
+    var colIdOrden = findCol(headers || [], "IdOrdenServidor");
+    var colPrecio = findCol(headers || [], "Precio");
+    var details = [];
+    for (var i = 0; i < (rows || []).length; i++) {
+      var row = rows[i];
+      var instRaw = txt(cols.map.instrumento ? row[cols.map.instrumento] : "");
+      if (!instRaw) continue;
+      var parsed = parseA3BlotterInstrument(instRaw);
+      var ticker = unifyTicker(parsed.tickerRaw, config.equivalencias);
+      var tipo = txt(cols.map.operacion ? row[cols.map.operacion] : "");
+      var tipoU = stripAccents(tipo).toUpperCase();
+      var qty = parseNumber(cols.map.cantidad ? row[cols.map.cantidad] : 0);
+      var precio = parseNumber(colPrecio ? row[colPrecio] : 0);
+      var total = qty * precio / 100;
+      var ctaCompra = txt(cols.map.ctaCompra ? row[cols.map.ctaCompra] : "");
+      var ctaVenta = txt(cols.map.ctaVenta ? row[cols.map.ctaVenta] : "");
+      var tipoOk = tipoU === "COMPRA" || tipoU === "VENTA";
+      var account = tipoU === "COMPRA" ? ctaCompra : tipoU === "VENTA" ? ctaVenta : "";
+      var accountOk = tipoOk && blotterAccountOk(account, config);
+      var incluida = tipoOk && accountOk ? 1 : 0;
+      var motivo;
+      if (!tipoOk) motivo = "Excluida: " + tipo + " (no es compra/venta)";
+      else if (!account) motivo = "Excluida: sin cuenta " + (tipoU === "COMPRA" ? "compra" : "venta");
+      else if (!incluida) motivo = "Excluida: cuenta " + account + " no es propia";
+      else motivo = "Incluida";
+      var id = txt(colIdNeg ? row[colIdNeg] : "") || txt(colIdOrden ? row[colIdOrden] : "");
+      details.push({
+        origen: "A3",
+        id: id,
+        instrumento: parsed.tickerRaw,
+        posicion: instRaw,
+        ticker: ticker,
+        plazo: parsed.plazo,
+        tipo: tipo,
+        estado: "",
+        propia: incluida ? "Si" : "",
+        ctaCompra: ctaCompra,
+        ctaVenta: ctaVenta,
+        cantidad: qty,
+        monto: total,
+        incluida: incluida,
+        vnCompra: tipoU === "COMPRA" ? incluida * qty : 0,
+        vnVenta: tipoU === "VENTA" ? incluida * qty : 0,
+        flujoCompra: tipoU === "COMPRA" ? incluida * total : 0,
+        flujoVenta: tipoU === "VENTA" ? incluida * total : 0,
+        motivo: motivo
+      });
+    }
+    return { details: details, missing: cols.missing, format: "blotter-privado" };
+  }
+
+  function processA3(rows, headers, config) {
+    if (isA3BlotterHeaders(headers)) return processA3Blotter(rows, headers, config);
+    return processA3Legacy(rows, headers, config);
   }
 
   function processPantalla(rows, headers, config) {
@@ -576,6 +686,7 @@
       headerCheck: {
         byma: byma.missing,
         a3: a3.missing,
+        a3Format: a3.format || "",
         pantalla: pant.missing,
         pantallaMode: pantIn.mode || "VACIO"
       },
@@ -590,12 +701,14 @@
   var api = {
     BYMA_FIELDS: BYMA_FIELDS,
     A3_FIELDS: A3_FIELDS,
+    A3_BLOTTER_FIELDS: A3_BLOTTER_FIELDS,
     PANTALLA_FIELDS: PANTALLA_FIELDS,
     defaultConfig: defaultConfig,
     parseNumber: parseNumber,
     findCol: findCol,
     unifyTicker: unifyTicker,
     parsePantallaSymbol: parsePantallaSymbol,
+    parseA3BlotterInstrument: parseA3BlotterInstrument,
     parseCSV: parseCSV,
     tableFromAoa: tableFromAoa,
     processByma: processByma,
@@ -1187,13 +1300,27 @@
         var checks = [];
         checks.push("SENEBI " + headerBadges(result.headerCheck.byma, !!fByma));
         checks.push("Pantalla " + headerBadges(result.headerCheck.pantalla, !!fPant));
-        checks.push("A3 " + headerBadges(result.headerCheck.a3, !!fA3));
+        var a3Badge = headerBadges(result.headerCheck.a3, !!fA3);
+        if (fA3 && result.headerCheck.a3Format === "blotter-privado" && a3Badge === "OK") {
+          a3Badge = "OK · Blotter Privado";
+        }
+        checks.push("A3 " + a3Badge);
         var missingAny =
           (fByma && result.headerCheck.byma.length) ||
           (fPant && result.headerCheck.pantalla.length) ||
           (fA3 && result.headerCheck.a3.length);
+        var a3NoOwn =
+          fA3 &&
+          result.headerCheck.a3Format === "blotter-privado" &&
+          result.a3.length &&
+          result.kpis.opsA3 === 0;
         if (missingAny) {
           setStatus("Encabezados: " + checks.join(" · "), "warning");
+        } else if (a3NoOwn) {
+          setStatus(
+            "A3 Blotter Privado: ninguna Cta Compra / Cta Venta coincide con los comitentes de cartera propia.",
+            "warning"
+          );
         } else if (!result.dashboard.length) {
           setStatus("No quedó ningún ticker incluido. Revisá agente, comitentes y encabezados.", "warning");
         } else {
